@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#007bff">
+    <title>AI Resume Tailoring Engine | resume-gen.app</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>resume-gen.app ✨</h1>
+            <p class="subtitle">Upload your resume, paste a job URL, get a perfectly formatted resume tailored for that exact position. Ready to submit immediately.</p>
+        </header>
+
+        <form id="resume-form">
+            <div class="form-group">
+                <label for="jobUrl">1. Paste Job Posting URL</label>
+                <input type="url" id="jobUrl" name="jobUrl" placeholder="https://www.linkedin.com/jobs/view/..." required>
+                <small style="color: #6c757d; font-size: 0.9rem; margin-top: 5px; display: block;">AI will analyze this job and customize your resume content to match perfectly</small>
+            </div>
+            <div class="form-group">
+                <label for="resume">2. Upload Your Current Resume (.pdf)</label>
+                <input type="file" id="resume" name="resume" accept=".pdf" required>
+                <small style="color: #6c757d; font-size: 0.9rem; margin-top: 5px; display: block;">AI will create a professionally formatted resume ready to submit directly to employers</small>
+            </div>
+            <button type="submit" id="submit-btn">Create Job-Ready Resume</button>
+        </form>
+
+        <div id="loading" class="hidden">
+            <div class="spinner"></div>
+            <p id="loading-message">Analyzing... This may take up to a minute.</p>
+        </div>
+
+        <div id="results" class="hidden">
+            <h2>Your Professional Resume is Ready! 🎯</h2>
+            <p style="text-align: center; color: #28a745; font-weight: 500; margin-bottom: 20px;">
+                Professionally formatted • Job-specific content • Ready to submit
+            </p>
+            
+            <!-- Transformation Explanation Box -->
+            <div id="explanation-box" class="explanation-container">
+                <h3 class="explanation-header">📈 Resume Improvements Made</h3>
+                <div id="explanation-content" class="explanation-content">
+                    <!-- Explanation content will be populated by JavaScript -->
+                </div>
+            </div>
+            
+            <div class="preview-container">
+                <iframe id="resume-preview" src="" frameborder="0" style="width: 100%; height: 100%; border: 1px solid #dee2e6;" allowfullscreen></iframe>
+            </div>
+            <p style="text-align: center; margin: 10px 0; font-size: 0.9rem; color: #6c757d;">
+                Preview showing above • <a id="preview-link" href="#" style="color: #007bff;">Open in new tab if needed</a>
+            </p>
+            <div id="download-buttons" style="display: flex; gap: 15px; justify-content: center; margin-top: 20px; flex-wrap: wrap;">
+                <a id="download-pdf-btn" href="#" class="button" download style="background: #007bff;">📄 Download PDF</a>
+                <a id="download-docx-btn" href="#" class="button" download style="background: #28a745; display: none;">📝 Download Word Doc</a>
+            </div>
+        </div>
+        
+        <footer style="margin-top: 30px; text-align: center; color: #6c757d; font-size: 0.85rem; padding: 10px 0; border-top: 1px solid #e9ecef;">
+            <p style="margin: 0;">Powered by Gemini AI</p>
+        </footer>
+        
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
