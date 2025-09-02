@@ -172,7 +172,12 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.success) {
                     // Hide loading and show success after 3 seconds
@@ -192,10 +197,21 @@
                 }
             })
             .catch(error => {
+                console.error('Error:', error);
                 loadingIndicator.style.display = 'none';
                 generateBtn.disabled = false;
                 generateBtn.textContent = '🎯 Generate Enhanced Resume';
-                alert('Error: ' + error.message);
+                
+                // Better error message
+                let errorMsg = 'Failed to process resume. ';
+                if (error.message.includes('Failed to fetch')) {
+                    errorMsg += 'Please check your internet connection and try again.';
+                } else if (error.message.includes('HTTP error')) {
+                    errorMsg += 'Server error. Please try again later.';
+                } else {
+                    errorMsg += error.message;
+                }
+                alert('Error: ' + errorMsg);
             });
         });
 

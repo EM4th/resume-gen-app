@@ -3,6 +3,7 @@ Clean Flask Resume Generator App with Ad Monetization
 """
 
 from flask import Flask, request, render_template, jsonify, send_file
+from flask_cors import CORS
 import os
 import logging
 import uuid
@@ -26,6 +27,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+CORS(app)
 
 # Configuration
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -89,6 +91,10 @@ def generate_resume():
         # Get form data
         job_description = request.form.get('job_description', '').strip()
         output_format = request.form.get('format', 'pdf')
+        
+        # Validate input
+        if not job_description:
+            return jsonify({'error': 'Job description is required'}), 400
         
         # Check if resume file was uploaded
         if 'resume_file' not in request.files:
