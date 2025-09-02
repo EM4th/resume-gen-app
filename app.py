@@ -112,8 +112,8 @@ def index():
     # Track page view
     analytics_data['daily_users'] += 1
     
-    # Use ad-enabled template
-    return render_template('index_with_ads.html', session_id=session_id)
+    # Use clean template with working AdSense
+    return render_template('index.html', session_id=session_id)
 
 @app.route('/health')
 def health_check():
