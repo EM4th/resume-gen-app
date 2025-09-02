@@ -1,0 +1,16 @@
+John Doe
+Software Engineer
+
+Experience:
+- Senior Software Engineer at Tech Corp (2020-2024)
+- Developed web applications using Python and JavaScript
+- Led team of 5 developers on key projects
+- Improved system performance by 40%
+
+Education:
+- BS Computer Science, University of Technology (2016-2020)
+
+Skills:
+- Python, JavaScript, React, Node.js
+- AWS, Docker, Kubernetes
+- Agile development methodologies
