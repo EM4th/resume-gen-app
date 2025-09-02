@@ -115,6 +115,16 @@ def index():
     # Use ad-enabled template
     return render_template('index_with_ads.html', session_id=session_id)
 
+@app.route('/health')
+def health_check():
+    """Health check endpoint for monitoring"""
+    return jsonify({
+        'status': 'healthy',
+        'timestamp': datetime.now().isoformat(),
+        'version': '2.0',
+        'app': 'resume-gen'
+    })
+
 @app.route('/generate_resume', methods=['POST'])
 def generate_resume():
     """Generate resume with enhanced analytics tracking"""
