@@ -1,5 +1,17 @@
 /* Enhanced styles for resume generator */
 
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    line-height: 1.6;
+}
+
 .container {
     max-width: 1000px;
     margin: 0 auto;
@@ -15,8 +27,8 @@
 /* Header styling */
 header {
     text-align: center;
-    margin: 30px 0 40px 0;
-    padding: 40px 20px;
+    margin: 20px 0 30px 0;
+    padding: 30px 20px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-radius: 15px;
@@ -33,6 +45,12 @@ header h1 {
     font-size: 1.3rem;
     opacity: 0.9;
     margin: 0;
+}
+
+/* Ad container styling */
+.header-ad, .sidebar-ad, .footer-ad {
+    margin: 10px 0;
+    min-height: 0;
 }
 
 /* Form styling */
@@ -225,21 +243,47 @@ footer a:hover {
 
 /* Responsive design */
 @media (max-width: 768px) {
+    body {
+        margin: 0;
+        padding: 0;
+    }
+    
+    .container {
+        padding: 10px;
+        margin: 0;
+    }
+    
+    header {
+        margin: 10px 0 20px 0;
+        padding: 20px 15px;
+    }
+    
     header h1 {
         font-size: 2rem;
+        margin-bottom: 5px;
     }
     
     .subtitle {
         font-size: 1.1rem;
     }
     
-    .container {
-        padding: 10px;
-    }
-    
     .upload-section,
     .explanation-container,
     .preview-container {
         padding: 20px;
+        margin-bottom: 20px;
+    }
+    
+    /* Mobile ad spacing */
+    .header-ad, .sidebar-ad, .footer-ad {
+        margin: 5px 0;
+        padding: 0;
+    }
+    
+    /* Hide empty ad containers on mobile */
+    .adsbygoogle:empty {
+        display: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
     }
 }
