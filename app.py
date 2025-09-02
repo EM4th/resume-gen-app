@@ -129,10 +129,16 @@ def health_check():
 def ads_txt():
     """Serve ads.txt file for AdSense verification"""
     try:
+        # Try to serve from root directory first
+        file_path = 'ads.txt'
+        if os.path.exists(file_path):
+            return send_file(file_path, mimetype='text/plain')
+        # Fallback to static directory
         file_path = os.path.join('static', 'ads.txt')
         if os.path.exists(file_path):
             return send_file(file_path, mimetype='text/plain')
         else:
+            # Return the content directly as fallback
             return "google.com, pub-7524647518323966, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
     except Exception as e:
         logger.error(f"Error serving ads.txt: {str(e)}")
