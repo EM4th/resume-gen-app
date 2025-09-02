@@ -95,6 +95,61 @@
                     </a>
                 </div>
             </div>
+
+            <!-- New Success View for Additional Ad Generation -->
+            <div id="successContainer" class="success-container" style="display: none;">
+                <div class="success-header">
+                    <h2>🎉 Your Resume is Ready!</h2>
+                    <p class="success-subtitle">Take your job search to the next level</p>
+                </div>
+
+                <!-- Success Ad Space -->
+                <div class="success-ad" style="text-align: center; margin: 20px 0;">
+                    <ins class="adsbygoogle"
+                         style="display:block"
+                         data-ad-client="ca-pub-7524647518323966"
+                         data-ad-slot="auto"
+                         data-ad-format="rectangle"
+                         data-full-width-responsive="true"></ins>
+                    <script>
+                         (adsbygoogle = window.adsbygoogle || []).push({});
+                    </script>
+                </div>
+
+                <div class="next-steps">
+                    <h3>🚀 What's Next?</h3>
+                    <div class="action-grid">
+                        <div class="action-card">
+                            <h4>📄 Create Another Resume</h4>
+                            <p>Customize for different job positions</p>
+                            <button onclick="createNewResume()" class="action-btn">New Resume</button>
+                        </div>
+                        <div class="action-card">
+                            <h4>📝 Cover Letter</h4>
+                            <p>Generate a matching cover letter</p>
+                            <button onclick="generateCoverLetter()" class="action-btn">Cover Letter</button>
+                        </div>
+                        <div class="action-card">
+                            <h4>🎯 Job Search Tips</h4>
+                            <p>Expert advice for your industry</p>
+                            <button onclick="showJobTips()" class="action-btn">Get Tips</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Additional Ad Space -->
+                <div class="success-ad-bottom" style="text-align: center; margin: 30px 0;">
+                    <ins class="adsbygoogle"
+                         style="display:block"
+                         data-ad-client="ca-pub-7524647518323966"
+                         data-ad-slot="auto"
+                         data-ad-format="horizontal"
+                         data-full-width-responsive="true"></ins>
+                    <script>
+                         (adsbygoogle = window.adsbygoogle || []).push({});
+                    </script>
+                </div>
+            </div>
         </main>
 
         <!-- Sidebar Ad -->
@@ -220,6 +275,139 @@
 
         // Initialize tracking when page loads
         document.addEventListener('DOMContentLoaded', trackUserBehavior);
+
+        // Success view functions
+        function showSuccessView() {
+            // Hide other containers
+            document.getElementById('previewContainer').style.display = 'none';
+            document.getElementById('explanationContainer').style.display = 'none';
+            
+            // Show success container
+            document.getElementById('successContainer').style.display = 'block';
+            
+            // Track success view for ad optimization
+            gtag('event', 'success_view_shown', {
+                'conversion_complete': true,
+                'user_engagement': 'high'
+            });
+            
+            // Trigger ad refresh
+            if (typeof adsbygoogle !== 'undefined') {
+                (adsbygoogle = window.adsbygoogle || []).push({});
+            }
+            
+            // Scroll to success view
+            document.getElementById('successContainer').scrollIntoView({ 
+                behavior: 'smooth',
+                block: 'start'
+            });
+        }
+
+        function createNewResume() {
+            // Track new resume creation
+            gtag('event', 'new_resume_started', {
+                'user_type': 'returning',
+                'conversion_value': 'high'
+            });
+            
+            // Reset form and show main view
+            document.getElementById('resumeForm').reset();
+            document.getElementById('successContainer').style.display = 'none';
+            document.getElementById('previewContainer').style.display = 'none';
+            document.getElementById('explanationContainer').style.display = 'none';
+            
+            // Scroll to top
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // Refresh ads for new pageview
+            setTimeout(() => {
+                if (typeof adsbygoogle !== 'undefined') {
+                    (adsbygoogle = window.adsbygoogle || []).push({});
+                }
+            }, 1000);
+        }
+
+        function generateCoverLetter() {
+            gtag('event', 'cover_letter_interest', {
+                'feature_request': 'cover_letter',
+                'user_intent': 'job_application'
+            });
+            
+            alert('Cover Letter feature coming soon! 📝 We\'ll notify you when it\'s ready.');
+        }
+
+        function showJobTips() {
+            gtag('event', 'job_tips_interest', {
+                'feature_request': 'job_tips',
+                'user_intent': 'career_growth'
+            });
+            
+            const tips = [
+                "🎯 Tailor your resume for each job application",
+                "📱 Use LinkedIn to research hiring managers",
+                "💼 Follow up 1-2 weeks after applying", 
+                "🤝 Network within your target industry",
+                "📊 Track your applications and response rates"
+            ];
+            
+            alert("Job Search Tips:\\n\\n" + tips.join("\\n"));
+        }
+
+        // Modify the existing form submission to show success view after completion
+        document.getElementById('resumeForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Existing tracking code
+            gtag('event', 'resume_generation_started', {
+                'output_format': document.getElementById('format').value,
+                'user_type': 'active_job_seeker'
+            });
+
+            // Show loading
+            document.getElementById('loadingIndicator').style.display = 'block';
+
+            const formData = new FormData(this);
+
+            fetch('/generate_resume', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                // Show explanation first
+                if (data.explanation) {
+                    document.getElementById('explanationContent').innerHTML = data.explanation;
+                    document.getElementById('explanationContainer').style.display = 'block';
+                }
+
+                // Show preview
+                if (data.resume_url) {
+                    document.getElementById('pdfPreview').src = data.resume_url;
+                    document.getElementById('downloadLink').href = data.resume_url;
+                    document.getElementById('downloadLink').style.display = 'inline-block';
+                    document.getElementById('previewContainer').style.display = 'block';
+                }
+
+                // After a short delay, show success view
+                setTimeout(() => {
+                    showSuccessView();
+                }, 3000); // Show success view after 3 seconds
+                
+                // Track successful completion
+                trackCareerData(document.getElementById('jobDescription').value, true);
+            })
+            .catch(error => {
+                document.getElementById('loadingIndicator').style.display = 'none';
+                alert('Error: ' + error);
+            });
+        });
     </script>
 
     <!-- Footer Ad -->
