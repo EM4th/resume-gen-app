@@ -8,6 +8,18 @@ import logging
 import uuid
 from datetime import datetime
 import shutil
+import google.generativeai as genai
+import pdfplumber
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import inch
+from reportlab.lib import colors
+import re
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -23,6 +35,15 @@ PREVIEWS_FOLDER = 'previews'
 # Create necessary directories
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(PREVIEWS_FOLDER, exist_ok=True)
+
+# Configure Gemini AI
+GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY')
+if GOOGLE_API_KEY:
+    genai.configure(api_key=GOOGLE_API_KEY)
+    model = genai.GenerativeModel('gemini-pro')
+else:
+    model = None
+    logger.warning("GOOGLE_API_KEY not found. AI features will be disabled.")
 
 # Simple analytics tracking
 analytics_data = {
@@ -103,15 +124,115 @@ def generate_resume():
         return jsonify({'error': f'Error processing resume: {str(e)}'}), 500
 
 def process_resume_with_ai(resume_path: str, job_description: str, output_format: str) -> str:
-    """Process resume with AI enhancement - placeholder for now"""
-    output_filename = f"{uuid.uuid4()}_enhanced_resume.{output_format}"
-    output_path = os.path.join(PREVIEWS_FOLDER, output_filename)
-    
-    # For now, just copy the original file
-    # TODO: Implement actual AI processing here
-    shutil.copy2(resume_path, output_path)
-    
-    return output_path
+    """Process resume with AI enhancement"""
+    try:
+        # Extract text from uploaded resume
+        resume_text = extract_text_from_pdf(resume_path)
+        
+        if not resume_text.strip():
+            raise ValueError("Could not extract text from PDF")
+        
+        # Generate enhanced resume with AI
+        if model:
+            enhanced_content = enhance_resume_with_ai(resume_text, job_description)
+        else:
+            # Fallback: basic processing without AI
+            enhanced_content = resume_text
+            logger.warning("AI processing disabled, returning original content")
+        
+        # Generate output file
+        output_filename = f"{uuid.uuid4()}_enhanced_resume.{output_format}"
+        output_path = os.path.join(PREVIEWS_FOLDER, output_filename)
+        
+        if output_format.lower() == 'pdf':
+            create_pdf_resume(enhanced_content, output_path)
+        else:
+            # For now, just copy the original for non-PDF formats
+            shutil.copy2(resume_path, output_path)
+        
+        return output_path
+        
+    except Exception as e:
+        logger.error(f"Error in AI processing: {str(e)}")
+        # Fallback: just copy the original file
+        output_filename = f"{uuid.uuid4()}_resume.{output_format}"
+        output_path = os.path.join(PREVIEWS_FOLDER, output_filename)
+        shutil.copy2(resume_path, output_path)
+        return output_path
+
+def extract_text_from_pdf(pdf_path: str) -> str:
+    """Extract text from PDF file"""
+    try:
+        with pdfplumber.open(pdf_path) as pdf:
+            text = ""
+            for page in pdf.pages:
+                text += page.extract_text() + "\n"
+        return text
+    except Exception as e:
+        logger.error(f"Error extracting text from PDF: {str(e)}")
+        return ""
+
+def enhance_resume_with_ai(resume_text: str, job_description: str) -> str:
+    """Use AI to enhance resume based on job description"""
+    try:
+        prompt = f"""
+        You are an expert resume writer. Please enhance the following resume to better match the job description.
+
+        ORIGINAL RESUME:
+        {resume_text}
+
+        JOB DESCRIPTION:
+        {job_description}
+
+        Please provide an enhanced version of the resume that:
+        1. Maintains all original factual information
+        2. Improves wording and formatting
+        3. Highlights relevant skills for the job
+        4. Uses stronger action verbs
+        5. Quantifies achievements where possible
+        6. Maintains professional formatting
+
+        Return only the enhanced resume text, properly formatted:
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+        
+    except Exception as e:
+        logger.error(f"Error in AI enhancement: {str(e)}")
+        return resume_text
+
+def create_pdf_resume(content: str, output_path: str):
+    """Create a formatted PDF from resume content"""
+    try:
+        doc = SimpleDocTemplate(output_path, pagesize=letter,
+                              rightMargin=72, leftMargin=72,
+                              topMargin=72, bottomMargin=18)
+        
+        styles = getSampleStyleSheet()
+        story = []
+        
+        # Split content into paragraphs
+        paragraphs = content.split('\n\n')
+        
+        for para in paragraphs:
+            if para.strip():
+                # Check if it's a heading (simple heuristic)
+                if len(para.strip()) < 100 and '\n' not in para.strip():
+                    style = styles['Heading2']
+                else:
+                    style = styles['Normal']
+                
+                p = Paragraph(para.strip(), style)
+                story.append(p)
+                story.append(Spacer(1, 12))
+        
+        doc.build(story)
+        
+    except Exception as e:
+        logger.error(f"Error creating PDF: {str(e)}")
+        # If PDF creation fails, just copy the original
+        raise e
 
 @app.route('/preview/<filename>')
 def preview_file(filename):
