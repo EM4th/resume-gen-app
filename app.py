@@ -125,6 +125,19 @@ def health_check():
         'app': 'resume-gen'
     })
 
+@app.route('/ads.txt')
+def ads_txt():
+    """Serve ads.txt file for AdSense verification"""
+    try:
+        file_path = os.path.join('static', 'ads.txt')
+        if os.path.exists(file_path):
+            return send_file(file_path, mimetype='text/plain')
+        else:
+            return "google.com, pub-7524647518323966, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
+    except Exception as e:
+        logger.error(f"Error serving ads.txt: {str(e)}")
+        return "google.com, pub-7524647518323966, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
+
 @app.route('/generate_resume', methods=['POST'])
 def generate_resume():
     """Generate resume with enhanced analytics tracking"""
