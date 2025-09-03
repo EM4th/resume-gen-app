@@ -220,26 +220,26 @@ def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str,
         
         # Now get a detailed explanation of changes
         explanation_prompt = f"""
-        You are an expert resume writer. I have enhanced a resume for a specific job. Please provide a clear, engaging explanation of the key improvements made.
+        You are an expert resume writer. I have enhanced a resume for this specific job description. Please provide a clear, engaging explanation of the key improvements made to help this candidate succeed.
 
-        JOB DESCRIPTION:
+        JOB THEY'RE APPLYING FOR:
         {job_description}
 
-        Please provide a concise explanation (3-5 bullet points) of the most impactful changes made and why they improve the candidate's chances for this specific job.
+        Please provide a concise explanation (3-5 bullet points) of the most impactful improvements made to better match this job and why they increase the candidate's chances.
 
-        Focus on:
-        - Keywords added that match the job requirements
-        - Stronger action verbs used
-        - Relevant skills/experiences highlighted
-        - Achievements quantified or better presented
-        - Overall improvements to professional presentation
+        Focus on specific improvements like:
+        - Relevant keywords and skills highlighted that match the job requirements
+        - Professional language and stronger action verbs used
+        - Technical skills and experiences emphasized for this role
+        - Achievements better presented or quantified
+        - Overall presentation improved for this specific position
 
-        Format as bullet points with brief explanations:
-        • Improvement 1: Why it matters for this job
-        • Improvement 2: Why it matters for this job
-        • etc.
+        Format as engaging bullet points:
+        • Enhanced [specific area]: [brief explanation of why this helps for this job]
+        • Improved [specific area]: [brief explanation of value added]
+        • Added [specific improvement]: [why this matters for this role]
 
-        Keep it professional but engaging, showing clear value added:
+        Keep it professional but engaging, showing clear value for this specific job opportunity:
         """
         
         explanation_response = model.generate_content(explanation_prompt)
