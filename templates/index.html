@@ -152,80 +152,23 @@
         </script>
     </div>
 
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+    
     <script>
-        // Form submission handler
-        document.getElementById('resumeForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            
-            const formData = new FormData(this);
-            const generateBtn = document.getElementById('generateBtn');
-            const loadingIndicator = document.getElementById('loadingIndicator');
-            const uploadSection = document.getElementById('uploadSection');
-            
-            // Show loading state
-            generateBtn.disabled = true;
-            generateBtn.textContent = 'Processing...';
-            loadingIndicator.style.display = 'block';
-            
-            // Submit form
-            fetch('/generate_resume', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                if (data.success) {
-                    // Hide loading and show success after 3 seconds
-                    setTimeout(() => {
-                        loadingIndicator.style.display = 'none';
-                        showSuccessView();
-                        
-                        // Refresh ads
-                        try {
-                            (adsbygoogle = window.adsbygoogle || []).push({});
-                        } catch (e) {
-                            console.log('AdSense refresh skipped');
-                        }
-                    }, 3000);
-                } else {
-                    throw new Error(data.error || 'Unknown error occurred');
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                loadingIndicator.style.display = 'none';
-                generateBtn.disabled = false;
-                generateBtn.textContent = '🎯 Generate Enhanced Resume';
-                
-                // Better error message
-                let errorMsg = 'Failed to process resume. ';
-                if (error.message.includes('Failed to fetch')) {
-                    errorMsg += 'Please check your internet connection and try again.';
-                } else if (error.message.includes('HTTP error')) {
-                    errorMsg += 'Server error. Please try again later.';
-                } else {
-                    errorMsg += error.message;
-                }
-                alert('Error: ' + errorMsg);
-            });
-        });
-
-        function showSuccessView() {
-            document.getElementById('uploadSection').style.display = 'none';
-            document.getElementById('successContainer').style.display = 'block';
-        }
-
+        // Global function for "Create New Resume" button (needed for onclick in HTML)
         function createNewResume() {
-            document.getElementById('successContainer').style.display = 'none';
-            document.getElementById('uploadSection').style.display = 'block';
+            // Reset form
             document.getElementById('resumeForm').reset();
-            document.getElementById('generateBtn').disabled = false;
-            document.getElementById('generateBtn').textContent = '🎯 Generate Enhanced Resume';
+            
+            // Show upload section, hide success
+            document.getElementById('uploadSection').style.display = 'block';
+            document.getElementById('successContainer').style.display = 'none';
+            document.getElementById('loadingIndicator').style.display = 'none';
+            
+            // Reset button state
+            const submitBtn = document.getElementById('generateBtn');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '🎯 Generate Enhanced Resume';
         }
     </script>
 </body>

@@ -35,7 +35,7 @@ document.addEventListener('DOMContentLoaded', () => {
         submitBtn.disabled = true;
         submitBtn.textContent = 'Generating...';
         
-        console.log('Loading state set - upload hidden, loading shown');
+        console.log('Starting resume generation...');
 
         try {
             const formData = new FormData();
@@ -43,28 +43,30 @@ document.addEventListener('DOMContentLoaded', () => {
             formData.append('resume_file', resumeFile);
             formData.append('format', format);
 
+            console.log('Submitting form data...');
+            
             const response = await fetch('/generate_resume', {
                 method: 'POST',
                 body: formData,
             });
 
+            console.log('Response status:', response.status);
+            
             const data = await response.json();
-            console.log('Backend response:', data);
+            console.log('Response data:', data);
 
             if (!response.ok) {
                 throw new Error(data.error || 'Server error occurred');
             }
 
-            if (!data.success || !data.preview_url) {
-                throw new Error('Server response missing required data');
+            if (!data.success) {
+                throw new Error(data.error || 'Resume generation failed');
             }
 
-            console.log('Success! Creating complete result display...');
-            console.log('Data received:', data);
+            console.log('Success! Creating result display...');
             
-            // Hide loading and upload section
+            // Hide loading
             loadingDiv.style.display = 'none';
-            uploadSection.style.display = 'none';
             
             // Create comprehensive result display with explanation, preview, and download
             successDiv.innerHTML = `
@@ -89,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         <!-- Preview Frame -->
                         <div style="text-align: center; margin-bottom: 25px;">
-                            <iframe src="${data.preview_url}" 
+                            <iframe src="${data.preview_url || data.download_url}" 
                                     style="width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 4px;"
                                     title="Resume Preview">
                             </iframe>
@@ -97,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         <!-- Action Buttons -->
                         <div style="text-align: center; margin-bottom: 20px;">
-                            <a href="${data.preview_url}" 
+                            <a href="${data.preview_url || data.download_url}" 
                                target="_blank"
                                style="
                                    display: inline-block;
@@ -136,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         <!-- New Resume Button -->
                         <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e9ecef;">
-                            <button onclick="location.reload()" 
+                            <button onclick="createNewResume()" 
                                     style="
                                         padding: 10px 20px;
                                         background: #6c757d;
@@ -159,16 +161,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show success container
             successDiv.style.display = 'block';
             
-            console.log('Complete result display created successfully');
+            console.log('Result display created successfully');
 
         } catch (error) {
             console.error('Error:', error);
             
-            // Hide loading
+            // Hide loading and show upload section again
             loadingDiv.style.display = 'none';
             uploadSection.style.display = 'block';
             
-            // Show error
+            // Show error message
             alert(`Error: ${error.message}`);
             
         } finally {
@@ -177,77 +179,4 @@ document.addEventListener('DOMContentLoaded', () => {
             submitBtn.textContent = '🎯 Generate Enhanced Resume';
         }
     });
-
-    function addDownloadLink(downloadUrl) {
-        console.log('=== addDownloadLink DEBUG START ===');
-        console.log('addDownloadLink called with URL:', downloadUrl);
-        console.log('successDiv element:', successDiv);
-        console.log('successDiv innerHTML before:', successDiv.innerHTML);
-        
-        // Remove any existing download links
-        const existingLinks = successDiv.querySelectorAll('.download-link');
-        console.log('Found existing download links:', existingLinks.length);
-        existingLinks.forEach(link => link.remove());
-        
-        // Create download link with VERY obvious styling
-        const downloadLink = document.createElement('a');
-        downloadLink.href = downloadUrl;
-        downloadLink.download = 'enhanced_resume.pdf';
-        downloadLink.className = 'action-btn download-link';
-        downloadLink.style.cssText = `
-            display: block !important;
-            margin: 20px auto !important;
-            padding: 20px 40px !important;
-            background: red !important;
-            color: white !important;
-            text-decoration: none !important;
-            border-radius: 8px !important;
-            font-weight: bold !important;
-            font-size: 18px !important;
-            text-align: center !important;
-            border: 3px solid blue !important;
-            cursor: pointer !important;
-            width: 300px !important;
-        `;
-        downloadLink.textContent = '📥 DOWNLOAD YOUR RESUME (TEST)';
-        
-        console.log('Created download link element:', downloadLink);
-        console.log('Download link styles:', downloadLink.style.cssText);
-        
-        // Try multiple ways to add the link
-        console.log('Attempting to find .success-message...');
-        const successMessage = successDiv.querySelector('.success-message');
-        console.log('Found success message:', successMessage);
-        
-        if (successMessage) {
-            console.log('Inserting after success message...');
-            successMessage.insertAdjacentElement('afterend', downloadLink);
-            console.log('Inserted after success message');
-        } else {
-            console.log('Success message not found, appending to success div...');
-            successDiv.appendChild(downloadLink);
-            console.log('Appended to success div');
-        }
-        
-        console.log('successDiv innerHTML after:', successDiv.innerHTML);
-        console.log('Download link offsetWidth:', downloadLink.offsetWidth);
-        console.log('Download link offsetHeight:', downloadLink.offsetHeight);
-        console.log('Download link getBoundingClientRect:', downloadLink.getBoundingClientRect());
-        console.log('=== addDownloadLink DEBUG END ===');
-    }
 });
-
-// Function for "Create New Resume" button
-function createNewResume() {
-    // Reset form
-    document.getElementById('resumeForm').reset();
-    
-    // Show upload section, hide success
-    document.getElementById('uploadSection').style.display = 'block';
-    document.getElementById('successContainer').style.display = 'none';
-    document.getElementById('loadingIndicator').style.display = 'none';
-    
-    // Remove download links
-    const existingLinks = document.querySelectorAll('.download-link');
-    existingLinks.forEach(link => link.remove());
-}
