@@ -365,8 +365,9 @@ ORIGINAL RESUME (trimmed):\n{resume_text[:5000]}\n---
             raise ValueError("Empty AI response")
         normalized = _normalize_ai_text(enhanced_raw)
         sanitized = sanitize_enhanced_content(normalized)
-        explanation = _generate_explanation(resume_text, sanitized, job_description)
-        return sanitized, explanation
+        formatted = final_format_resume(sanitized)
+        explanation = _generate_explanation(resume_text, formatted, job_description)
+        return formatted, explanation
     except Exception as e:
         logger.error(f"Error in AI enhancement: {e}")
         return resume_text, f"AI enhancement temporarily unavailable (fallback). Error: {e}"
@@ -431,69 +432,45 @@ def fetch_job_content(url: str, timeout: int = 10) -> str:
         return ''
 
 def create_pdf_resume(content: str, output_path: str):
-    """Create a professionally formatted PDF with clear hierarchy & wrapping."""
+    """Create a professionally formatted PDF with strict section layout."""
     try:
         from reportlab.lib.enums import TA_CENTER
-        # Clean content again for PDF safety
+        content = final_format_resume(content)
         content = clean_for_pdf(content)
-
         doc = SimpleDocTemplate(
             output_path,
             pagesize=letter,
             rightMargin=54,
             leftMargin=54,
-            topMargin=54,
-            bottomMargin=54,
+            topMargin=50,
+            bottomMargin=50,
         )
-
         styles = getSampleStyleSheet()
         base = styles['Normal']
         base.fontSize = 10
         base.leading = 13
+        title_style = ParagraphStyle('TITLE', parent=base, fontSize=16, leading=18, alignment=TA_CENTER, spaceAfter=6)
+        contact_style = ParagraphStyle('CONTACT', parent=base, fontSize=9, alignment=TA_CENTER, textColor=colors.HexColor('#333333'), spaceAfter=10)
+        section_style = ParagraphStyle('SECTION', parent=base, fontSize=11, leading=14, spaceBefore=10, spaceAfter=4, textColor=colors.HexColor('#111111'))
+        bullet_style = ParagraphStyle('BULLET', parent=base, leftIndent=14, bulletIndent=6, spaceBefore=1, spaceAfter=1)
+        body_style = ParagraphStyle('BODY', parent=base, spaceBefore=0, spaceAfter=3)
 
-        title_style = ParagraphStyle(
-            'TITLE', parent=base, fontSize=16, leading=18,
-            alignment=TA_CENTER, spaceAfter=10
-        )
-        section_style = ParagraphStyle(
-            'SECTION', parent=base, fontSize=11, leading=14,
-            spaceBefore=14, spaceAfter=6, textColor=colors.HexColor('#222222')
-        )
-        bullet_style = ParagraphStyle(
-            'BULLET', parent=base, leftIndent=14, bulletIndent=6,
-            spaceBefore=2, spaceAfter=1
-        )
-        body_style = ParagraphStyle(
-            'BODY', parent=base, spaceBefore=1, spaceAfter=4
-        )
-
-        lines = [l.rstrip() for l in content.splitlines()]
-        first_non_empty = next((l for l in lines if l.strip()), '')
-        used_title = False
+        structured = parse_structured_lines(content)
         story = []
-
-        for raw in lines:
-            line = raw.strip()
-            if not line:
-                story.append(Spacer(1, 4))
+        if structured['name']:
+            story.append(Paragraph(structured['name'], title_style))
+        if structured['contact']:
+            story.append(Paragraph(structured['contact'], contact_style))
+        for sec in structured['order']:
+            entries = structured['sections'].get(sec, [])
+            if not entries:
                 continue
-            if not used_title and line == first_non_empty:
-                story.append(Paragraph(line, title_style))
-                used_title = True
-                continue
-            if line.isupper() and 2 <= len(line.split()) <= 6 and len(line) <= 48:
-                story.append(Paragraph(line, section_style))
-                continue
-            if line.startswith('- '):
-                story.append(Paragraph(line, bullet_style))
-                continue
-            if len(line) > 180 and '.' in line:
-                parts = [p.strip() for p in re.split(r'(?<=\.)\s+', line) if p.strip()]
-                for ptxt in parts:
-                    story.append(Paragraph(ptxt, body_style))
-            else:
-                story.append(Paragraph(line, body_style))
-
+            story.append(Paragraph(sec, section_style))
+            for ent in entries:
+                if ent.startswith('- '):
+                    story.append(Paragraph(ent, bullet_style))
+                else:
+                    story.append(Paragraph(ent, body_style))
         doc.build(story)
     except Exception as e:
         logger.error(f"Error creating PDF: {e}")
@@ -507,41 +484,37 @@ def create_pdf_resume(content: str, output_path: str):
 def create_docx_resume(content: str, output_path: str):
     """Generate a DOCX resume mirroring the PDF structure."""
     try:
+        formatted = final_format_resume(content)
         doc = Document()
         style = doc.styles['Normal']
         font = style.font
         font.name = 'Arial'
         font.size = Pt(10.5)
-        # Compatibility
         style._element.rPr.rFonts.set(qn('w:eastAsia'), 'Arial')
 
-        lines = [l.rstrip() for l in clean_for_pdf(content).splitlines()]
-        first_non = next((l for l in lines if l.strip()), '')
-        used_title = False
-        for raw in lines:
-            line = raw.strip()
-            if not line:
-                doc.add_paragraph('')
+        structured = parse_structured_lines(formatted)
+        if structured['name']:
+            p = doc.add_paragraph()
+            r = p.add_run(structured['name'])
+            r.bold = True
+            r.font.size = Pt(16)
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if structured['contact']:
+            p = doc.add_paragraph(structured['contact'])
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for sec in structured['order']:
+            entries = structured['sections'].get(sec, [])
+            if not entries:
                 continue
-            if not used_title and line == first_non:
-                p = doc.add_paragraph()
-                run = p.add_run(line)
-                run.bold = True
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run.font.size = Pt(16)
-                used_title = True
-                continue
-            if line.isupper() and 2 <= len(line.split()) <= 6 and len(line) <= 48:
-                p = doc.add_paragraph()
-                run = p.add_run(line)
-                run.bold = True
-                run.font.size = Pt(11.5)
-                continue
-            if line.startswith('- '):
-                p = doc.add_paragraph(style='List Bullet')
-                p.add_run(line[2:])
-                continue
-            p = doc.add_paragraph(line)
+            ph = doc.add_paragraph()
+            rh = ph.add_run(sec)
+            rh.bold = True
+            rh.font.size = Pt(11.5)
+            for ent in entries:
+                if ent.startswith('- '):
+                    bp = doc.add_paragraph(ent[2:], style='List Bullet')
+                else:
+                    doc.add_paragraph(ent)
         doc.save(output_path)
     except Exception as e:
         logger.error(f"Error creating DOCX: {e}")
@@ -670,6 +643,178 @@ def clean_for_pdf(text: str) -> str:
     while lines and not lines[-1]:
         lines.pop()
     return "\n".join(lines)
+
+#############################
+# Final formatting utilities
+#############################
+
+CANONICAL_SECTION_ORDER = ["SUMMARY","EXPERIENCE","PROJECTS","EDUCATION","SKILLS","CERTIFICATIONS"]
+
+def final_format_resume(text: str) -> str:
+    lines = [l.rstrip() for l in text.splitlines()]
+    # Merge artificially wrapped lines (no terminal punctuation & next line lowercase)
+    merged = []
+    i = 0
+    while i < len(lines):
+        cur = lines[i].rstrip()
+        if cur and not cur.startswith('- ') and not cur.isupper() and not re.match(r'^[A-Z ]{3,}$', cur) and not re.match(r'^[A-Z0-9 .,&/-]{3,}$', cur):
+            # heuristic simplified later if needed
+            pass
+        if cur and not cur.startswith('-') and not cur.endswith(('.', '!', '?')):
+            if i + 1 < len(lines):
+                nxt = lines[i+1].strip()
+                if nxt and not nxt.startswith('- ') and not nxt.isupper() and nxt[0].islower():
+                    cur = cur + ' ' + nxt
+                    i += 1
+                    # continue merging chain
+                    while i + 1 < len(lines):
+                        look = lines[i+1].strip()
+                        if look and not look.startswith('- ') and not look.isupper() and look[0].islower() and not cur.endswith(('.', '!', '?')):
+                            cur = cur + ' ' + look
+                            i += 1
+                        else:
+                            break
+        merged.append(cur)
+        i += 1
+    lines = merged
+    name = ''
+    contact_parts = []
+    idx = 0
+    while idx < len(lines) and not lines[idx].strip():
+        idx += 1
+    if idx < len(lines):
+        name = lines[idx].strip()
+        idx += 1
+    contact_tokens = ['@','linkedin','github','portfolio','http','www.','gmail','phone','|']
+    while idx < len(lines):
+        l = lines[idx].strip()
+        if not l:
+            idx += 1
+            break
+        if l.isupper() and 1 < len(l.split()) <= 5:
+            break
+        # Heuristic: treat as contact only if it contains contact token AND not obviously a job/company line
+        is_contact = any(tok in l.lower() for tok in contact_tokens)
+        job_pattern = re.search(r'(\bmanager\b|\bengineer\b|\bdeveloper\b|\bdesigner\b|\bconsultant\b|\bproject\b)', l.lower())
+        date_pattern = re.search(r'(20\d{2}|19\d{2})', l)
+        if is_contact and not (job_pattern and date_pattern):
+            contact_parts.append(l)
+            idx += 1
+            continue
+        # If line looks like start of content (job line), stop contact block
+        break
+    contact_line = ' | '.join([re.sub(r'\s+',' ',c) for c in contact_parts])
+    current = None
+    sections: dict[str,list] = {}
+    def ensure(sec):
+        sections.setdefault(sec, [])
+    def polish_bullet(text_line: str) -> str:
+        if not text_line.startswith('- '):
+            text_line = '- ' + text_line.lstrip('- ').strip()
+        body = text_line[2:].strip()
+        if body:
+            if body[0].islower():
+                body = body[0].upper() + body[1:]
+            # Avoid double punctuation
+            if len(body) > 12 and not re.search(r'[.!?]$', body):
+                body += '.'
+            # Capitalize sentences after period if needed
+            body = re.sub(r'([.!?]\s+)([a-z])', lambda m: m.group(1) + m.group(2).upper(), body)
+        return '- ' + body
+
+    while idx < len(lines):
+        raw = lines[idx].strip()
+        idx += 1
+        if not raw:
+            continue
+        if raw.isupper() and raw.upper() in CANONICAL_SECTION_ORDER:
+            current = raw.upper()
+            ensure(current)
+            continue
+        if current is None:
+            current = 'SUMMARY'
+            ensure(current)
+        if current in {'EXPERIENCE','PROJECTS'}:
+            if raw.startswith('• '):
+                raw = '- ' + raw[2:].strip()
+            if not raw.startswith('- '):
+                if re.search(r'(\b20\d{2}\b|\b19\d{2}\b).*?(Present|20\d{2}|19\d{2})', raw) or ' - ' in raw or '–' in raw:
+                    sections[current].append(raw)
+                else:
+                    sections[current].append(polish_bullet(raw))
+            else:
+                sections[current].append(polish_bullet(raw))
+        else:
+            if current == 'SUMMARY':
+                if raw.startswith('- '):
+                    sections[current].append(polish_bullet(raw))
+                else:
+                    if re.search(r'\b(led|managed|built|developed|created|increased|reduced|optimized|designed|launched|implemented)\b', raw.lower()) and len(raw.split()) > 3:
+                        sections[current].append(polish_bullet(raw))
+                    else:
+                        sections[current].append(raw)
+            else:
+                if raw.startswith('- '):
+                    sections[current].append(polish_bullet(raw))
+                else:
+                    sections[current].append(raw)
+    output = []
+    if name:
+        output.append(name)
+    if contact_line:
+        output.append(contact_line)
+    for sec in CANONICAL_SECTION_ORDER:
+        if sec in sections and sections[sec]:
+            output.append('')
+            output.append(sec)
+            entries = sections[sec]
+            # Consolidate SKILLS / CERTIFICATIONS into single line if multiple non-bullets
+            if sec in {'SKILLS','CERTIFICATIONS'}:
+                non_bullets = [e for e in entries if not e.startswith('- ')]
+                if len(non_bullets) > 1:
+                    combined = ', '.join([re.sub(r'^-\s+','',n).rstrip('.') for n in non_bullets])
+                    output.append(combined)
+                    continue
+            output.extend(entries)
+    # collapse blanks
+    cleaned = []
+    prev_blank = False
+    for l in output:
+        if not l:
+            if not prev_blank:
+                cleaned.append('')
+            prev_blank = True
+        else:
+            cleaned.append(l.rstrip())
+            prev_blank = False
+    return '\n'.join(cleaned).strip()
+
+def parse_structured_lines(text: str) -> dict:
+    lines = [l.rstrip() for l in text.splitlines()]
+    name = ''
+    contact = ''
+    idx = 0
+    while idx < len(lines) and not lines[idx].strip():
+        idx += 1
+    if idx < len(lines):
+        name = lines[idx].strip(); idx += 1
+    if idx < len(lines) and ('@' in lines[idx] or ' | ' in lines[idx]):
+        contact = lines[idx].strip(); idx += 1
+    sections = {}
+    current = None
+    for i in range(idx, len(lines)):
+        l = lines[i].strip()
+        if not l:
+            continue
+        if l.isupper() and l in CANONICAL_SECTION_ORDER:
+            current = l
+            sections.setdefault(current, [])
+            continue
+        if current is None:
+            current = 'SUMMARY'; sections.setdefault(current, [])
+        sections[current].append(l)
+    order = [s for s in CANONICAL_SECTION_ORDER if s in sections]
+    return {'name': name, 'contact': contact, 'sections': sections, 'order': order}
 
 @app.route('/preview/<filename>')
 def preview_file(filename):
