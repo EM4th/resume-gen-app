@@ -59,62 +59,107 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error('Server response missing required data');
             }
 
-            console.log('Success! Showing success container...');
+            console.log('Success! Creating complete result display...');
             console.log('Data received:', data);
             
-            // Force hide everything else first
-            uploadSection.style.display = 'none';
+            // Hide loading and upload section
             loadingDiv.style.display = 'none';
+            uploadSection.style.display = 'none';
             
-            // Instead of trying to add a download link, let's replace the entire success container content
+            // Create comprehensive result display with explanation, preview, and download
             successDiv.innerHTML = `
-                <div style="text-align: center; padding: 30px; background: white; border: 3px solid green;">
-                    <h2 style="color: #667eea; margin-bottom: 20px;">🎉 Your Resume is Ready!</h2>
-                    <p style="margin-bottom: 30px; color: #666;">Your AI-enhanced resume has been generated successfully!</p>
+                <div style="max-width: 1000px; margin: 0 auto; padding: 20px;">
+                    <!-- Header -->
+                    <div style="text-align: center; margin-bottom: 30px; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px;">
+                        <h2 style="margin: 0 0 10px 0; font-size: 28px;">🎉 Your Enhanced Resume is Ready!</h2>
+                        <p style="margin: 0; font-size: 16px; opacity: 0.9;">AI has successfully optimized your resume for this job opportunity</p>
+                    </div>
                     
-                    <a href="${data.download_url || data.preview_url}" 
-                       download="enhanced_resume.pdf"
-                       style="
-                           display: inline-block;
-                           padding: 20px 40px;
-                           background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                           color: white;
-                           text-decoration: none;
-                           border-radius: 12px;
-                           font-weight: bold;
-                           font-size: 18px;
-                           margin: 20px;
-                           border: 3px solid #333;
-                           box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                           transition: all 0.3s ease;
-                       "
-                       onmouseover="this.style.transform='translateY(-3px)'"
-                       onmouseout="this.style.transform='translateY(0)'"
-                    >
-                        📥 Download Your Enhanced Resume
-                    </a>
+                    <!-- Explanation Section -->
+                    <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 25px; margin-bottom: 30px;">
+                        <h3 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 20px;">📝 What We Improved</h3>
+                        <div style="color: #495057; line-height: 1.6; font-size: 15px;">
+                            ${data.explanation || 'Your resume has been enhanced to better match the job requirements.'}
+                        </div>
+                    </div>
                     
-                    <div style="margin-top: 30px;">
-                        <button onclick="createNewResume()" 
-                                style="padding: 12px 24px; margin: 10px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                            📄 Create Another Resume
-                        </button>
+                    <!-- Preview and Download Section -->
+                    <div style="background: white; border: 1px solid #e9ecef; border-radius: 8px; padding: 25px;">
+                        <h3 style="color: #2c3e50; margin: 0 0 20px 0; font-size: 20px;">📄 Your Enhanced Resume</h3>
+                        
+                        <!-- Preview Frame -->
+                        <div style="text-align: center; margin-bottom: 25px;">
+                            <iframe src="${data.preview_url}" 
+                                    style="width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 4px;"
+                                    title="Resume Preview">
+                            </iframe>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div style="text-align: center; margin-bottom: 20px;">
+                            <a href="${data.preview_url}" 
+                               target="_blank"
+                               style="
+                                   display: inline-block;
+                                   padding: 12px 24px;
+                                   background: #28a745;
+                                   color: white;
+                                   text-decoration: none;
+                                   border-radius: 6px;
+                                   font-weight: 600;
+                                   margin: 0 10px;
+                                   transition: background 0.3s;
+                               "
+                               onmouseover="this.style.background='#218838'"
+                               onmouseout="this.style.background='#28a745'">
+                                👀 Open Full Preview
+                            </a>
+                            
+                            <a href="${data.download_url || data.preview_url}" 
+                               download="enhanced_resume.pdf"
+                               style="
+                                   display: inline-block;
+                                   padding: 12px 24px;
+                                   background: #007bff;
+                                   color: white;
+                                   text-decoration: none;
+                                   border-radius: 6px;
+                                   font-weight: 600;
+                                   margin: 0 10px;
+                                   transition: background 0.3s;
+                               "
+                               onmouseover="this.style.background='#0056b3'"
+                               onmouseout="this.style.background='#007bff'">
+                                📥 Download PDF
+                            </a>
+                        </div>
+                        
+                        <!-- New Resume Button -->
+                        <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e9ecef;">
+                            <button onclick="location.reload()" 
+                                    style="
+                                        padding: 10px 20px;
+                                        background: #6c757d;
+                                        color: white;
+                                        border: none;
+                                        border-radius: 6px;
+                                        cursor: pointer;
+                                        font-weight: 600;
+                                        transition: background 0.3s;
+                                    "
+                                    onmouseover="this.style.background='#545b62'"
+                                    onmouseout="this.style.background='#6c757d'">
+                                📄 Create Another Resume
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
             
-            // Force show success with nuclear option CSS
-            successDiv.style.cssText = `
-                display: block !important;
-                visibility: visible !important;
-                opacity: 1 !important;
-                position: relative !important;
-                z-index: 9999 !important;
-                margin: 20px 0 !important;
-            `;
+            // Show success container
+            successDiv.style.display = 'block';
             
-            console.log('Success container completely replaced with new HTML');
-            console.log('Download URL:', data.download_url || data.preview_url);
+            console.log('Complete result display created successfully');
 
         } catch (error) {
             console.error('Error:', error);

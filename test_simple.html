@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Resume Generator - Simple Test</title>
+</head>
+<body>
+    <h1>Simple Resume Generator Test</h1>
+    
+    <form action="/generate_resume" method="POST" enctype="multipart/form-data">
+        <div>
+            <label>Job Description:</label><br>
+            <textarea name="job_description" rows="4" cols="50" required>Looking for a Python developer with experience in web applications</textarea>
+        </div>
+        <br>
+        <div>
+            <label>Resume File (PDF):</label><br>
+            <input type="file" name="resume_file" accept=".pdf" required>
+        </div>
+        <br>
+        <div>
+            <label>Format:</label><br>
+            <select name="format">
+                <option value="pdf">PDF</option>
+            </select>
+        </div>
+        <br>
+        <button type="submit">Generate Resume</button>
+    </form>
+    
+    <div id="result" style="margin-top: 20px; padding: 20px; border: 1px solid #ccc; display: none;">
+        <h3>Result:</h3>
+        <pre id="response-data"></pre>
+    </div>
+
+    <script>
+        // Override form submission to show the raw response
+        document.querySelector('form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const resultDiv = document.getElementById('result');
+            const responseData = document.getElementById('response-data');
+            
+            try {
+                console.log('Submitting form...');
+                
+                const response = await fetch('/generate_resume', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                console.log('Response status:', response.status);
+                
+                const data = await response.json();
+                console.log('Response data:', data);
+                
+                // Show the raw response
+                responseData.textContent = JSON.stringify(data, null, 2);
+                resultDiv.style.display = 'block';
+                
+                // If successful, also show a download link
+                if (data.success && (data.download_url || data.preview_url)) {
+                    const downloadUrl = data.download_url || data.preview_url;
+                    const downloadLink = document.createElement('a');
+                    downloadLink.href = downloadUrl;
+                    downloadLink.download = 'enhanced_resume.pdf';
+                    downloadLink.textContent = 'Download Your Resume';
+                    downloadLink.style.cssText = 'display: block; margin: 10px 0; padding: 10px; background: blue; color: white; text-decoration: none; text-align: center;';
+                    resultDiv.appendChild(downloadLink);
+                }
+                
+            } catch (error) {
+                console.error('Error:', error);
+                responseData.textContent = 'Error: ' + error.message;
+                resultDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>

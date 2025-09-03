@@ -84,6 +84,10 @@ def ads_txt():
         logger.error(f"Error serving ads.txt: {str(e)}")
         return "google.com, pub-7524647518323966, DIRECT, f08c47fec0942fa0", 200, {'Content-Type': 'text/plain'}
 
+@app.route('/test')
+def test():
+    return render_template('test_simple.html')
+
 @app.route('/generate_resume', methods=['POST'])
 def generate_resume():
     """Generate resume with AI enhancement"""
@@ -113,24 +117,25 @@ def generate_resume():
         file.save(filepath)
         
         # Process the resume
-        enhanced_resume_path = process_resume_with_ai(filepath, job_description, output_format)
+        enhanced_resume_path, explanation = process_resume_with_ai(filepath, job_description, output_format)
         
         # Update analytics
         analytics_data['total_resumes_generated'] += 1
         
-        # Return success
+        # Return success with explanation
         return jsonify({
             'success': True,
             'preview_url': f'/preview/{os.path.basename(enhanced_resume_path)}',
-            'download_url': f'/download/{os.path.basename(enhanced_resume_path)}'
+            'download_url': f'/download/{os.path.basename(enhanced_resume_path)}',
+            'explanation': explanation
         })
         
     except Exception as e:
         logger.error(f"Error generating resume: {str(e)}")
         return jsonify({'error': f'Error processing resume: {str(e)}'}), 500
 
-def process_resume_with_ai(resume_path: str, job_description: str, output_format: str) -> str:
-    """Process resume with AI enhancement"""
+def process_resume_with_ai(resume_path: str, job_description: str, output_format: str) -> tuple[str, str]:
+    """Process resume with AI enhancement and return file path and explanation"""
     try:
         # Extract text from uploaded resume
         resume_text = extract_text_from_pdf(resume_path)
@@ -140,10 +145,11 @@ def process_resume_with_ai(resume_path: str, job_description: str, output_format
         
         # Generate enhanced resume with AI
         if model:
-            enhanced_content = enhance_resume_with_ai(resume_text, job_description)
+            enhanced_content, explanation = enhance_resume_with_ai(resume_text, job_description)
         else:
             # Fallback: basic processing without AI
             enhanced_content = resume_text
+            explanation = "AI enhancement unavailable. Original resume returned."
             logger.warning("AI processing disabled, returning original content")
         
         # Generate output file
@@ -156,7 +162,7 @@ def process_resume_with_ai(resume_path: str, job_description: str, output_format
             # For now, just copy the original for non-PDF formats
             shutil.copy2(resume_path, output_path)
         
-        return output_path
+        return output_path, explanation
         
     except Exception as e:
         logger.error(f"Error in AI processing: {str(e)}")
@@ -164,7 +170,7 @@ def process_resume_with_ai(resume_path: str, job_description: str, output_format
         output_filename = f"{uuid.uuid4()}_resume.{output_format}"
         output_path = os.path.join(PREVIEWS_FOLDER, output_filename)
         shutil.copy2(resume_path, output_path)
-        return output_path
+        return output_path, "Error occurred during AI enhancement. Original resume returned."
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extract text from PDF file"""
@@ -178,10 +184,11 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         logger.error(f"Error extracting text from PDF: {str(e)}")
         return ""
 
-def enhance_resume_with_ai(resume_text: str, job_description: str) -> str:
-    """Use AI to enhance resume based on job description"""
+def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str, str]:
+    """Use AI to enhance resume based on job description and return both enhanced content and explanation"""
     try:
-        prompt = f"""
+        # First, get the enhanced resume
+        enhance_prompt = f"""
         You are an expert resume writer. Please enhance the following resume to better match the job description.
 
         ORIGINAL RESUME:
@@ -201,12 +208,38 @@ def enhance_resume_with_ai(resume_text: str, job_description: str) -> str:
         Return only the enhanced resume text, properly formatted:
         """
         
-        response = model.generate_content(prompt)
-        return response.text
+        enhanced_response = model.generate_content(enhance_prompt)
+        enhanced_content = enhanced_response.text
+        
+        # Now get explanation of changes
+        explanation_prompt = f"""
+        You are an expert resume writer. I have enhanced a resume for a specific job. Please provide a clear, concise explanation of the key improvements made.
+
+        ORIGINAL RESUME:
+        {resume_text[:1000]}...
+
+        ENHANCED RESUME:
+        {enhanced_content[:1000]}...
+
+        JOB DESCRIPTION:
+        {job_description}
+
+        Please provide a bullet-point explanation of the 3-5 most important changes made and why they improve the resume for this specific job. Keep it concise and focused on the value added.
+
+        Format as:
+        • Change 1: Explanation
+        • Change 2: Explanation
+        • etc.
+        """
+        
+        explanation_response = model.generate_content(explanation_prompt)
+        explanation = explanation_response.text
+        
+        return enhanced_content, explanation
         
     except Exception as e:
         logger.error(f"Error in AI enhancement: {str(e)}")
-        return resume_text
+        return resume_text, f"AI enhancement error: {str(e)}"
 
 def create_pdf_resume(content: str, output_path: str):
     """Create a formatted PDF from resume content"""
