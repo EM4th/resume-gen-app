@@ -69,6 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
             loadingDiv.style.display = 'none';
             
             // Create comprehensive result display with explanation, preview, and download
+            const extra = data.additional_downloads || {};
+            const docxLink = extra.docx ? `<a href="${extra.docx}" download="enhanced_resume.docx" style="display: inline-block; padding: 12px 24px; background: #6f42c1; color: white; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 0 10px; transition: background 0.3s;" onmouseover="this.style.background='#59359a'" onmouseout="this.style.background='#6f42c1'">📝 Download DOCX</a>` : '';
+            const jobUrlNote = data.job_url ? `<p style="margin-top:6px; font-size:13px; color:#666;">Analyzed job source: <a href="${data.job_url}" target="_blank" rel="noopener">${data.job_url}</a></p>` : '';
+
             successDiv.innerHTML = `
                 <div style="max-width: 1000px; margin: 0 auto; padding: 20px;">
                     <!-- Header -->
@@ -80,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <!-- Explanation Section -->
                     <div style="background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 8px; padding: 25px; margin-bottom: 30px;">
                         <h3 style="color: #2c3e50; margin: 0 0 15px 0; font-size: 20px;">📝 What We Improved</h3>
+                        ${jobUrlNote}
                         <div style="color: #495057; line-height: 1.6; font-size: 15px;">
                             ${data.explanation || 'Your resume has been enhanced to better match the job requirements.'}
                         </div>
@@ -134,6 +139,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                onmouseout="this.style.background='#007bff'">
                                 📥 Download PDF
                             </a>
+                            ${docxLink}
                         </div>
                         
                         <!-- New Resume Button -->

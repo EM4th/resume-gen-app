@@ -17,6 +17,12 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
 import re
+import requests
+from bs4 import BeautifulSoup
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
+from docx.shared import Pt
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -93,11 +99,11 @@ def generate_resume():
     """Generate resume with AI enhancement"""
     try:
         # Get form data
-        job_description = request.form.get('job_description', '').strip()
+        job_description_raw = request.form.get('job_description', '').strip()
         output_format = request.form.get('format', 'pdf')
-        
+
         # Validate input
-        if not job_description:
+        if not job_description_raw:
             return jsonify({'error': 'Job description is required'}), 400
         
         # Check if resume file was uploaded
@@ -117,25 +123,37 @@ def generate_resume():
         file.save(filepath)
         
         # Process the resume
-        enhanced_resume_path, explanation = process_resume_with_ai(filepath, job_description, output_format)
+        # Expand job description if it's a URL
+        if is_probable_url(job_description_raw):
+            scraped = fetch_job_content(job_description_raw)
+            job_description = scraped if scraped else job_description_raw
+            job_source_url = job_description_raw
+        else:
+            job_description = job_description_raw
+            job_source_url = None
+
+        enhanced_resume_path, explanation, extra_files = process_resume_with_ai(filepath, job_description, output_format)
         
         # Update analytics
         analytics_data['total_resumes_generated'] += 1
         
         # Return success with explanation
-        return jsonify({
+        resp = {
             'success': True,
             'preview_url': f'/preview/{os.path.basename(enhanced_resume_path)}',
             'download_url': f'/download/{os.path.basename(enhanced_resume_path)}',
-            'explanation': explanation
-        })
+            'explanation': explanation,
+            'job_url': job_source_url,
+            'additional_downloads': {k: f'/download/{os.path.basename(v)}' for k, v in extra_files.items()} if extra_files else {}
+        }
+        return jsonify(resp)
         
     except Exception as e:
         logger.error(f"Error generating resume: {str(e)}")
         return jsonify({'error': f'Error processing resume: {str(e)}'}), 500
 
-def process_resume_with_ai(resume_path: str, job_description: str, output_format: str) -> tuple[str, str]:
-    """Process resume with AI enhancement and return file path and explanation"""
+def process_resume_with_ai(resume_path: str, job_description: str, output_format: str) -> tuple[str, str, dict]:
+    """Process resume with AI enhancement and return main file path, explanation, and any extra files."""
     try:
         # Extract text from uploaded resume
         resume_text = extract_text_from_pdf(resume_path)
@@ -153,16 +171,27 @@ def process_resume_with_ai(resume_path: str, job_description: str, output_format
             logger.warning("AI processing disabled, returning original content")
         
         # Generate output file
-        output_filename = f"{uuid.uuid4()}_enhanced_resume.{output_format}"
-        output_path = os.path.join(PREVIEWS_FOLDER, output_filename)
-        
-        if output_format.lower() == 'pdf':
-            create_pdf_resume(enhanced_content, output_path)
-        else:
-            # For now, just copy the original for non-PDF formats
-            shutil.copy2(resume_path, output_path)
-        
-        return output_path, explanation
+        output_filename = f"{uuid.uuid4()}_enhanced_resume.pdf"
+        output_pdf_path = os.path.join(PREVIEWS_FOLDER, output_filename)
+        create_pdf_resume(enhanced_content, output_pdf_path)
+
+        extra = {}
+        if output_format.lower() == 'docx':
+            docx_filename = f"{uuid.uuid4()}_enhanced_resume.docx"
+            docx_path = os.path.join(PREVIEWS_FOLDER, docx_filename)
+            create_docx_resume(enhanced_content, docx_path)
+            extra['docx'] = docx_path
+        elif output_format.lower() == 'pdf':
+            # Optionally also create docx for user convenience
+            try:
+                docx_filename = f"{uuid.uuid4()}_enhanced_resume.docx"
+                docx_path = os.path.join(PREVIEWS_FOLDER, docx_filename)
+                create_docx_resume(enhanced_content, docx_path)
+                extra['docx'] = docx_path
+            except Exception as ce:
+                logger.warning(f"DOCX generation failed (non-fatal): {ce}")
+
+        return output_pdf_path, explanation, extra
         
     except Exception as e:
         logger.error(f"Error in AI processing: {str(e)}")
@@ -170,7 +199,7 @@ def process_resume_with_ai(resume_path: str, job_description: str, output_format
         output_filename = f"{uuid.uuid4()}_resume.{output_format}"
         output_path = os.path.join(PREVIEWS_FOLDER, output_filename)
         shutil.copy2(resume_path, output_path)
-        return output_path, "Error occurred during AI enhancement. Original resume returned."
+    return output_path, "Error occurred during AI enhancement. Original resume returned.", {}
 
 def extract_text_from_pdf(pdf_path: str) -> str:
     """Extract text from PDF file"""
@@ -243,27 +272,73 @@ def _heuristic_explanation(original: str, enhanced: str, job: str) -> str:
 
 
 def _generate_explanation(original: str, enhanced: str, job: str) -> str:
-    """Ask model for explanation; fallback heuristically if bad/empty output."""
-    if not model:
-        return _heuristic_explanation(original, enhanced, job)
-    try:
-        prompt = f"""
-You are a senior resume strategist. Compare ORIGINAL vs ENHANCED for the JOB DESCRIPTION.
-Return 4-6 bullet points. Each bullet begins with **Bold Label** then a concise explanation *of the change and why it improves alignment* (NOT general advice). Do NOT ask for more info.
+    """Generate structured explanation referencing sections & job content."""
+    # First attempt AI detailed explanation
+    ai_text = None
+    if model:
+        try:
+            prompt = f"""
+You are an expert resume coach. Compare ORIGINAL vs ENHANCED for JOB CONTENT.
+OUTPUT STRICTLY:
+• 5-7 bullets.
+• Each bullet: **SECTION / FOCUS:** concise change; include 1 short quoted phrase ("...") added or strengthened from ENHANCED that aligns with the job; finish with why it improves fit.
+• Use SECTION names (SUMMARY, EXPERIENCE, EDUCATION, SKILLS, PROJECTS, CERTIFICATIONS) when applicable; if cross-sectional use **OVERALL IMPACT**.
+No generic advice, no asking for info.
 
-JOB DESCRIPTION:\n{job[:2500]}\n---
-ORIGINAL:\n{original[:4000]}\n---
-ENHANCED:\n{enhanced[:4000]}\n---
+JOB CONTENT (truncated):\n{job[:3000]}\n---
+ORIGINAL (truncated):\n{original[:3500]}\n---
+ENHANCED (truncated):\n{enhanced[:3500]}\n---
 """
-        resp = model.generate_content(prompt)
-        text = (resp.text or '').strip() if resp else ''
-        # If model asks for more info or is empty, fallback
-        if (not text) or ('provide' in text.lower() and 'original' in text.lower() and 'enhanced' in text.lower()):
-            return _heuristic_explanation(original, enhanced, job)
-        return text
-    except Exception as e:
-        logger.warning(f"Explanation generation failed: {e}")
+            resp = model.generate_content(prompt)
+            ai_text = (resp.text or '').strip() if resp else ''
+        except Exception as e:
+            logger.warning(f"AI structured explanation failed: {e}")
+            ai_text = None
+    if ai_text and len(ai_text.split()) > 12:
+        return ai_text
+    # Fallback structured deterministic explanation
+    return build_deterministic_explanation(original, enhanced, job)
+
+def build_deterministic_explanation(original: str, enhanced: str, job: str) -> str:
+    def tokens(s):
+        return set(re.findall(r"[A-Za-z]{3,}", s.lower()))
+    job_toks = tokens(job)
+    orig_sections = parse_sections(original)
+    enh_sections = parse_sections(enhanced)
+    bullets = []
+    for section, eh_lines in enh_sections.items():
+        otext = '\n'.join(orig_sections.get(section, []))
+        etext = '\n'.join(eh_lines)
+        added = (tokens(etext) - tokens(otext)) & job_toks
+        if not added:
+            continue
+        # find example line with an added token
+        example = ''
+        for l in eh_lines:
+            if any(tok in l.lower() for tok in list(added)[:8]):
+                example = l.strip()[:140]
+                break
+        added_list = ', '.join(list(sorted(added))[:5])
+        bullets.append(f"• **{section}:** Emphasized {added_list}. e.g. \"{example}\" to mirror role priorities.")
+        if len(bullets) >= 6:
+            break
+    if not bullets:
         return _heuristic_explanation(original, enhanced, job)
+    return '\n'.join(bullets)
+
+def parse_sections(text: str) -> dict:
+    current = 'GENERAL'
+    sections = {current: []}
+    for line in text.splitlines():
+        l = line.strip()
+        if not l:
+            continue
+        if l.isupper() and 2 <= len(l.split()) <= 5:
+            current = l
+            sections.setdefault(current, [])
+            continue
+        sections[current].append(l)
+    return sections
 
 
 def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str, str]:
@@ -289,13 +364,71 @@ ORIGINAL RESUME (trimmed):\n{resume_text[:5000]}\n---
         if not enhanced_raw:
             raise ValueError("Empty AI response")
         normalized = _normalize_ai_text(enhanced_raw)
-        # Additional sanitization pass to remove markdown artifacts & placeholders
         sanitized = sanitize_enhanced_content(normalized)
         explanation = _generate_explanation(resume_text, sanitized, job_description)
         return sanitized, explanation
     except Exception as e:
         logger.error(f"Error in AI enhancement: {e}")
         return resume_text, f"AI enhancement temporarily unavailable (fallback). Error: {e}"
+
+#############################
+# Job URL scraping utilities
+#############################
+
+def is_probable_url(text: str) -> bool:
+    return bool(re.match(r'^https?://[^\s]+$', text.strip()))
+
+def fetch_job_content(url: str, timeout: int = 10) -> str:
+    """Fetch and extract main textual content from a job posting URL."""
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (JobContentFetcher/1.0)'
+        }
+        resp = requests.get(url, headers=headers, timeout=timeout)
+        if resp.status_code != 200:
+            logger.warning(f"Job URL fetch non-200: {resp.status_code}")
+            return ''
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        # Remove script/style/nav/footer
+        for tag in soup(['script','style','noscript','header','footer','svg']):
+            tag.decompose()
+        text_parts = []
+        # Domain heuristics
+        domain = re.sub(r'^https?://','', url).split('/')[0]
+        selectors = []
+        if 'greenhouse' in domain:
+            selectors += ['div#content', 'div.opening', 'div.main']
+        if 'lever.co' in domain:
+            selectors += ['div.posting', 'div.content']
+        if 'workday' in domain:
+            selectors += ['div.body', 'div.GWTCKEditor']
+        if 'linkedin.' in domain:
+            selectors += ['div.description__text', 'section.description']
+        if 'indeed.' in domain:
+            selectors += ['div.jobsearch-JobComponent', 'div.jobsearch-JobDescription']
+        # Add generic probable containers
+        selectors += ['section','article','div']
+        grabbed = set()
+        for sel in selectors:
+            for node in soup.select(sel):
+                txt = node.get_text(separator=' ', strip=True)
+                if txt and len(txt.split()) > 40 and txt not in grabbed:
+                    text_parts.append(txt)
+                    grabbed.add(txt)
+                    if sum(len(p.split()) for p in text_parts) > 1600:
+                        break
+            if sum(len(p.split()) for p in text_parts) > 1600:
+                break
+        if not text_parts:
+            # fallback entire body text
+            body_txt = soup.get_text(separator=' ', strip=True)
+            return ' '.join(body_txt.split()[:1800])
+        combined = '\n'.join(text_parts)
+        cleaned = re.sub(r'\s+',' ', combined)
+        return cleaned[:12000]
+    except Exception as e:
+        logger.warning(f"Job content fetch failed: {e}")
+        return ''
 
 def create_pdf_resume(content: str, output_path: str):
     """Create a professionally formatted PDF with clear hierarchy & wrapping."""
@@ -370,6 +503,49 @@ def create_pdf_resume(content: str, output_path: str):
         except Exception as fe:
             logger.error(f"Fallback write failed: {fe}")
         raise e
+
+def create_docx_resume(content: str, output_path: str):
+    """Generate a DOCX resume mirroring the PDF structure."""
+    try:
+        doc = Document()
+        style = doc.styles['Normal']
+        font = style.font
+        font.name = 'Arial'
+        font.size = Pt(10.5)
+        # Compatibility
+        style._element.rPr.rFonts.set(qn('w:eastAsia'), 'Arial')
+
+        lines = [l.rstrip() for l in clean_for_pdf(content).splitlines()]
+        first_non = next((l for l in lines if l.strip()), '')
+        used_title = False
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                doc.add_paragraph('')
+                continue
+            if not used_title and line == first_non:
+                p = doc.add_paragraph()
+                run = p.add_run(line)
+                run.bold = True
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run.font.size = Pt(16)
+                used_title = True
+                continue
+            if line.isupper() and 2 <= len(line.split()) <= 6 and len(line) <= 48:
+                p = doc.add_paragraph()
+                run = p.add_run(line)
+                run.bold = True
+                run.font.size = Pt(11.5)
+                continue
+            if line.startswith('- '):
+                p = doc.add_paragraph(style='List Bullet')
+                p.add_run(line[2:])
+                continue
+            p = doc.add_paragraph(line)
+        doc.save(output_path)
+    except Exception as e:
+        logger.error(f"Error creating DOCX: {e}")
+        raise
 
 #############################
 # Post-processing sanitation
