@@ -187,9 +187,9 @@ def extract_text_from_pdf(pdf_path: str) -> str:
 def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str, str]:
     """Use AI to enhance resume based on job description and return both enhanced content and explanation"""
     try:
-        # First, get the enhanced resume
+        # First, get the enhanced resume with better formatting instructions
         enhance_prompt = f"""
-        You are an expert resume writer. Please enhance the following resume to better match the job description.
+        You are an expert resume writer and career coach. Please enhance the following resume to better match the job description while maintaining professional formatting.
 
         ORIGINAL RESUME:
         {resume_text}
@@ -197,39 +197,49 @@ def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str,
         JOB DESCRIPTION:
         {job_description}
 
-        Please provide an enhanced version of the resume that:
-        1. Maintains all original factual information
-        2. Improves wording and formatting
-        3. Highlights relevant skills for the job
-        4. Uses stronger action verbs
-        5. Quantifies achievements where possible
-        6. Maintains professional formatting
+        Please provide an enhanced version that:
+        1. Maintains all original factual information (names, dates, companies, etc.)
+        2. Improves wording using stronger action verbs and industry keywords
+        3. Better highlights relevant skills and experiences for this specific job
+        4. Quantifies achievements where possible with numbers/percentages
+        5. Uses proper resume formatting with clear sections
+        6. Maintains professional tone and structure
 
-        Return only the enhanced resume text, properly formatted:
+        IMPORTANT FORMATTING REQUIREMENTS:
+        - Keep the candidate's name at the top
+        - Organize content in clear sections (Contact, Summary/Objective, Experience, Education, Skills, etc.)
+        - Use bullet points for job responsibilities and achievements
+        - Maintain consistent formatting throughout
+        - Ensure each section is clearly separated
+
+        Return only the enhanced resume text with proper formatting:
         """
         
         enhanced_response = model.generate_content(enhance_prompt)
         enhanced_content = enhanced_response.text
         
-        # Now get explanation of changes
+        # Now get a detailed explanation of changes
         explanation_prompt = f"""
-        You are an expert resume writer. I have enhanced a resume for a specific job. Please provide a clear, concise explanation of the key improvements made.
-
-        ORIGINAL RESUME:
-        {resume_text[:1000]}...
-
-        ENHANCED RESUME:
-        {enhanced_content[:1000]}...
+        You are an expert resume writer. I have enhanced a resume for a specific job. Please provide a clear, engaging explanation of the key improvements made.
 
         JOB DESCRIPTION:
         {job_description}
 
-        Please provide a bullet-point explanation of the 3-5 most important changes made and why they improve the resume for this specific job. Keep it concise and focused on the value added.
+        Please provide a concise explanation (3-5 bullet points) of the most impactful changes made and why they improve the candidate's chances for this specific job.
 
-        Format as:
-        • Change 1: Explanation
-        • Change 2: Explanation
+        Focus on:
+        - Keywords added that match the job requirements
+        - Stronger action verbs used
+        - Relevant skills/experiences highlighted
+        - Achievements quantified or better presented
+        - Overall improvements to professional presentation
+
+        Format as bullet points with brief explanations:
+        • Improvement 1: Why it matters for this job
+        • Improvement 2: Why it matters for this job
         • etc.
+
+        Keep it professional but engaging, showing clear value added:
         """
         
         explanation_response = model.generate_content(explanation_prompt)
@@ -239,10 +249,10 @@ def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str,
         
     except Exception as e:
         logger.error(f"Error in AI enhancement: {str(e)}")
-        return resume_text, f"AI enhancement error: {str(e)}"
+        return resume_text, f"AI enhancement temporarily unavailable. Please try again. Error: {str(e)}"
 
 def create_pdf_resume(content: str, output_path: str):
-    """Create a formatted PDF from resume content"""
+    """Create a professionally formatted PDF from resume content"""
     try:
         doc = SimpleDocTemplate(output_path, pagesize=letter,
                               rightMargin=72, leftMargin=72,
@@ -251,27 +261,88 @@ def create_pdf_resume(content: str, output_path: str):
         styles = getSampleStyleSheet()
         story = []
         
-        # Split content into paragraphs
-        paragraphs = content.split('\n\n')
+        # Define custom styles for better resume formatting
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
         
-        for para in paragraphs:
-            if para.strip():
-                # Check if it's a heading (simple heuristic)
-                if len(para.strip()) < 100 and '\n' not in para.strip():
-                    style = styles['Heading2']
-                else:
-                    style = styles['Normal']
-                
-                p = Paragraph(para.strip(), style)
-                story.append(p)
-                story.append(Spacer(1, 12))
+        # Custom styles for resume sections
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=18,
+            spaceAfter=12,
+            alignment=TA_CENTER,
+            textColor=colors.black
+        )
+        
+        section_style = ParagraphStyle(
+            'CustomSection',
+            parent=styles['Heading2'],
+            fontSize=14,
+            spaceBefore=16,
+            spaceAfter=8,
+            textColor=colors.black,
+            borderWidth=1,
+            borderColor=colors.black,
+            borderPadding=4
+        )
+        
+        body_style = ParagraphStyle(
+            'CustomBody',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceBefore=4,
+            spaceAfter=6,
+            alignment=TA_JUSTIFY,
+            leftIndent=20
+        )
+        
+        # Process content line by line for better formatting
+        lines = content.split('\n')
+        current_paragraph = []
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                # Empty line - end current paragraph
+                if current_paragraph:
+                    para_text = ' '.join(current_paragraph)
+                    
+                    # Determine style based on content
+                    if len(para_text) < 60 and not any(word in para_text.lower() for word in ['experience', 'education', 'skills', 'summary', 'objective']):
+                        # Likely a name/title
+                        p = Paragraph(para_text, title_style)
+                    elif any(word in para_text.lower() for word in ['experience', 'education', 'skills', 'summary', 'objective', 'contact', 'certifications']):
+                        # Section header
+                        p = Paragraph(para_text.upper(), section_style)
+                    else:
+                        # Regular content
+                        p = Paragraph(para_text, body_style)
+                    
+                    story.append(p)
+                    current_paragraph = []
+                    story.append(Spacer(1, 6))
+            else:
+                current_paragraph.append(line)
+        
+        # Add any remaining content
+        if current_paragraph:
+            para_text = ' '.join(current_paragraph)
+            p = Paragraph(para_text, body_style)
+            story.append(p)
         
         doc.build(story)
         
     except Exception as e:
         logger.error(f"Error creating PDF: {str(e)}")
-        # If PDF creation fails, just copy the original
-        raise e
+        # If PDF creation fails, create a simple fallback
+        try:
+            doc = SimpleDocTemplate(output_path, pagesize=letter)
+            styles = getSampleStyleSheet()
+            story = [Paragraph(content, styles['Normal'])]
+            doc.build(story)
+        except:
+            # Last resort - just copy the original
+            raise e
 
 @app.route('/preview/<filename>')
 def preview_file(filename):
