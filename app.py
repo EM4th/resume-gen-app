@@ -292,8 +292,19 @@ def create_pdf_resume(content: str, output_path: str):
             fontSize=11,
             spaceBefore=4,
             spaceAfter=6,
-            alignment=TA_JUSTIFY,
-            leftIndent=20
+            alignment=TA_LEFT,
+            leftIndent=0
+        )
+        
+        bullet_style = ParagraphStyle(
+            'BulletStyle',
+            parent=styles['Normal'],
+            fontSize=11,
+            spaceBefore=4,
+            spaceAfter=6,
+            alignment=TA_LEFT,
+            leftIndent=20,
+            firstLineIndent=0
         )
         
         # Process content line by line for better formatting
@@ -322,7 +333,21 @@ def create_pdf_resume(content: str, output_path: str):
                     current_paragraph = []
                     story.append(Spacer(1, 6))
             else:
-                current_paragraph.append(line)
+                # Process individual lines for bullet points
+                if line.startswith('•') or line.startswith('*') or line.startswith('-'):
+                    # Handle bullet points immediately
+                    if current_paragraph:
+                        para_text = ' '.join(current_paragraph)
+                        p = Paragraph(para_text, body_style)
+                        story.append(p)
+                        current_paragraph = []
+                    
+                    bullet_text = line[1:].strip()
+                    # Use simple dash instead of bullet character to avoid encoding issues
+                    p = Paragraph(f"- {bullet_text}", bullet_style)
+                    story.append(p)
+                else:
+                    current_paragraph.append(line)
         
         # Add any remaining content
         if current_paragraph:
@@ -338,7 +363,9 @@ def create_pdf_resume(content: str, output_path: str):
         try:
             doc = SimpleDocTemplate(output_path, pagesize=letter)
             styles = getSampleStyleSheet()
-            story = [Paragraph(content, styles['Normal'])]
+            # Clean content to avoid bullet point issues
+            clean_content = content.replace('•', '-').replace('*', '-')
+            story = [Paragraph(clean_content, styles['Normal'])]
             doc.build(story)
         except:
             # Last resort - just copy the original
