@@ -3,7 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Resume Generator - Transform Your Career</title>
+    <title>AI Resume Generator - resume-gen.app</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Professional AI-powered resume generator that customizes your resume for any job posting. Upload your resume, enter a job URL or description, and get an ATS-optimized resume in seconds.">
+    <meta name="keywords" content="resume generator, AI resume, ATS optimization, job application, career tools, resume builder">
+    <meta name="author" content="resume-gen.app">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://resume-gen.app/">
+    <meta property="og:title" content="AI Resume Generator - Perfect Resumes for Any Job">
+    <meta property="og:description" content="Transform your resume with AI to match any job description perfectly. Upload resume, enter job URL, get optimized results.">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://resume-gen.app/">
+    <meta property="twitter:title" content="AI Resume Generator - Perfect Resumes for Any Job">
+    <meta property="twitter:description" content="Transform your resume with AI to match any job description perfectly. Upload resume, enter job URL, get optimized results.">
+    
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=3.0">
     
     <!-- Google AdSense -->
@@ -32,7 +50,7 @@
     <div class="container">
         <header>
             <h1>🚀 AI Resume Generator</h1>
-            <p class="subtitle">Transform your resume with AI to match any job description perfectly</p>
+            <p class="subtitle">Transform your resume with AI to match any job description perfectly | resume-gen.app</p>
         </header>
 
         <main class="main-content">
@@ -47,8 +65,16 @@
                     <div class="form-group">
                         <label for="jobDescription">Job Description (URL or Text):</label>
                         <textarea id="jobDescription" name="job_description" 
-                                  placeholder="Paste job description text or enter a job posting URL..." 
-                                  rows="6" required></textarea>
+                                  placeholder="📋 Paste the complete job description text here, OR enter a URL to a job posting (LinkedIn, Indeed, company websites, etc.)
+
+Examples:
+• https://www.linkedin.com/jobs/view/...
+• https://jobs.company.com/...
+• Or paste the full job description text
+
+The AI will analyze ALL content from the job posting to perfectly tailor your resume!" 
+                                  rows="8" required></textarea>
+                        <small class="help-text">💡 URLs work with most job sites including LinkedIn, Indeed, company career pages, etc.</small>
                     </div>
                     
                     <div class="form-group">

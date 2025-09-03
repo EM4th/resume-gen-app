@@ -1,9 +1,18 @@
 services:
   - type: web
-    name: ai-resume-generator
+    name: resume-gen-app
     env: python
+    repo: https://github.com/EM4th/resume-gen-app
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app
+    plan: free
+    healthCheckPath: /health
     envVars:
+      - key: FLASK_ENV
+        value: production
       - key: PYTHON_VERSION
         value: 3.9.18
+      - key: GOOGLE_API_KEY
+        sync: false  # Set manually in dashboard
+    domains:
+      - resume-gen.app

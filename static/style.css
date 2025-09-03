@@ -92,6 +92,13 @@ header h1 {
     min-height: 120px;
 }
 
+.help-text {
+    font-size: 0.9rem;
+    color: #666;
+    margin-top: 5px;
+    font-style: italic;
+}
+
 /* Buttons */
 .generate-btn {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
