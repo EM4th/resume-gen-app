@@ -21,7 +21,7 @@
 
 3. **Environment Variables**
    ```
-   GOOGLE_API_KEY=AIzaSyAl9w2qaTffDcuXuo6jxlAU8nV-6-Sa-eg
+   GOOGLE_API_KEY="your_google_api_key_here"
    FLASK_ENV=production
    ```
 
@@ -36,7 +36,7 @@
 ```bash
 # Install Heroku CLI first
 heroku create resume-gen-app
-heroku config:set GOOGLE_API_KEY=AIzaSyAl9w2qaTffDcuXuo6jxlAU8nV-6-Sa-eg
+heroku config:set GOOGLE_API_KEY="your_google_api_key_here"
 heroku config:set FLASK_ENV=production
 
 # Deploy

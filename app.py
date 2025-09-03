@@ -255,121 +255,55 @@ def create_pdf_resume(content: str, output_path: str):
     """Create a professionally formatted PDF from resume content"""
     try:
         doc = SimpleDocTemplate(output_path, pagesize=letter,
-                              rightMargin=72, leftMargin=72,
-                              topMargin=72, bottomMargin=18)
-        
+                              rightMargin=inch, leftMargin=inch,
+                              topMargin=inch, bottomMargin=inch)
         styles = getSampleStyleSheet()
         story = []
         
-        # Define custom styles for better resume formatting
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_JUSTIFY
+        # Basic style for the body
+        body_style = styles['Normal']
         
-        # Custom styles for resume sections
-        title_style = ParagraphStyle(
-            'CustomTitle',
-            parent=styles['Heading1'],
-            fontSize=18,
-            spaceAfter=12,
-            alignment=TA_CENTER,
-            textColor=colors.black
-        )
-        
-        section_style = ParagraphStyle(
-            'CustomSection',
-            parent=styles['Heading2'],
-            fontSize=14,
-            spaceBefore=16,
-            spaceAfter=8,
-            textColor=colors.black,
-            borderWidth=1,
-            borderColor=colors.black,
-            borderPadding=4
-        )
-        
-        body_style = ParagraphStyle(
-            'CustomBody',
-            parent=styles['Normal'],
-            fontSize=11,
-            spaceBefore=4,
-            spaceAfter=6,
-            alignment=TA_LEFT,
-            leftIndent=0
-        )
-        
+        # Style for bullet points
         bullet_style = ParagraphStyle(
             'BulletStyle',
             parent=styles['Normal'],
-            fontSize=11,
-            spaceBefore=4,
-            spaceAfter=6,
-            alignment=TA_LEFT,
             leftIndent=20,
-            firstLineIndent=0
+            firstLineIndent=0,
+            spaceBefore=2,
+            spaceAfter=2
         )
-        
-        # Process content line by line for better formatting
-        lines = content.split('\n')
-        current_paragraph = []
+
+        lines = content.strip().split('\n')
         
         for line in lines:
-            line = line.strip()
-            if not line:
-                # Empty line - end current paragraph
-                if current_paragraph:
-                    para_text = ' '.join(current_paragraph)
-                    
-                    # Determine style based on content
-                    if len(para_text) < 60 and not any(word in para_text.lower() for word in ['experience', 'education', 'skills', 'summary', 'objective']):
-                        # Likely a name/title
-                        p = Paragraph(para_text, title_style)
-                    elif any(word in para_text.lower() for word in ['experience', 'education', 'skills', 'summary', 'objective', 'contact', 'certifications']):
-                        # Section header
-                        p = Paragraph(para_text.upper(), section_style)
-                    else:
-                        # Regular content
-                        p = Paragraph(para_text, body_style)
-                    
-                    story.append(p)
-                    current_paragraph = []
-                    story.append(Spacer(1, 6))
+            clean_line = line.strip()
+            
+            if not clean_line:
+                story.append(Spacer(1, 0.1*inch))
+                continue
+
+            # Replace common bullet characters with a simple dash
+            if clean_line.startswith('•') or clean_line.startswith('*'):
+                clean_line = '- ' + clean_line[1:].strip()
+
+            if clean_line.startswith('- '):
+                p = Paragraph(clean_line, bullet_style)
             else:
-                # Process individual lines for bullet points
-                if line.startswith('•') or line.startswith('*') or line.startswith('-'):
-                    # Handle bullet points immediately
-                    if current_paragraph:
-                        para_text = ' '.join(current_paragraph)
-                        p = Paragraph(para_text, body_style)
-                        story.append(p)
-                        current_paragraph = []
-                    
-                    bullet_text = line[1:].strip()
-                    # Use simple dash instead of bullet character to avoid encoding issues
-                    p = Paragraph(f"- {bullet_text}", bullet_style)
-                    story.append(p)
-                else:
-                    current_paragraph.append(line)
-        
-        # Add any remaining content
-        if current_paragraph:
-            para_text = ' '.join(current_paragraph)
-            p = Paragraph(para_text, body_style)
+                p = Paragraph(clean_line, body_style)
+            
             story.append(p)
-        
+
         doc.build(story)
         
     except Exception as e:
         logger.error(f"Error creating PDF: {str(e)}")
-        # If PDF creation fails, create a simple fallback
+        # If PDF creation fails, create a simple fallback text file
         try:
-            doc = SimpleDocTemplate(output_path, pagesize=letter)
-            styles = getSampleStyleSheet()
-            # Clean content to avoid bullet point issues
-            clean_content = content.replace('•', '-').replace('*', '-')
-            story = [Paragraph(clean_content, styles['Normal'])]
-            doc.build(story)
-        except:
-            # Last resort - just copy the original
-            raise e
+            with open(output_path.replace('.pdf', '.txt'), 'w') as f:
+                f.write(content)
+        except Exception as fallback_e:
+            logger.error(f"Fallback to text file also failed: {fallback_e}")
+        raise e
 
 @app.route('/preview/<filename>')
 def preview_file(filename):

@@ -5,7 +5,7 @@ DOMAIN=resume-gen.app
 PRODUCTION_URL=https://resume-gen.app
 
 ## Environment Variables for Production
-export GOOGLE_API_KEY=AIzaSyAl9w2qaTffDcuXuo6jxlAU8nV-6-Sa-eg
+export GOOGLE_API_KEY="your_google_api_key_here"
 export FLASK_ENV=production
 export PORT=5000
 

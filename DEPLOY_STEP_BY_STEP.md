@@ -46,7 +46,7 @@ In the **"Environment"** section, click **"Add Environment Variable"**:
 
 ```
 Name: GOOGLE_API_KEY
-Value: AIzaSyAl9w2qaTffDcuXuo6jxlAU8nV-6-Sa-eg
+Value: your_google_api_key_here
 ```
 
 Click **"Add Environment Variable"** again:

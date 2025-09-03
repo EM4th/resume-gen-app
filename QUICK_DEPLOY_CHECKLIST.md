@@ -21,7 +21,7 @@
 Name: resume-gen-app
 Build: pip install -r requirements.txt  
 Start: gunicorn app:app
-Environment: GOOGLE_API_KEY = AIzaSyAl9w2qaTffDcuXuo6jxlAU8nV-6-Sa-eg
+Environment: GOOGLE_API_KEY = "your_google_api_key_here"
 ```
 
 ### **3. Deploy** (2 min)
