@@ -184,126 +184,316 @@ def extract_text_from_pdf(pdf_path: str) -> str:
         logger.error(f"Error extracting text from PDF: {str(e)}")
         return ""
 
-def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str, str]:
-    """Use AI to enhance resume based on job description and return both enhanced content and explanation"""
+#############################################
+# AI Enhancer with Robust Formatting & Explain
+#############################################
+
+def _normalize_ai_text(text: str) -> str:
+    """Normalize AI output to consistent plain text resume format."""
+    if not text:
+        return ""
+    lines = []
+    for raw in text.splitlines():
+        line = raw.strip('\r ').rstrip()
+        if not line:
+            lines.append("")
+            continue
+        # Normalize bullets
+        if re.match(r"^[•*\-]\s+", line):
+            body = re.sub(r"^[•*\-]\s+", "", line).strip()
+            lines.append(f"- {body}")
+            continue
+        # Uppercase section headers heuristically
+        if (len(line) < 40 and 1 <= len(line.split()) <= 5 and
+            any(tok.lower() in {"summary","experience","education","skills","projects","certifications","profile","objective"} for tok in line.lower().split())):
+            lines.append("")
+            lines.append(line.upper())
+            lines.append("")
+            continue
+        lines.append(line)
+    # Collapse multiple blank lines
+    cleaned = []
+    blank = False
+    for l in lines:
+        if l == "":
+            if not blank:
+                cleaned.append("")
+            blank = True
+        else:
+            cleaned.append(l)
+            blank = False
+    return "\n".join(cleaned).strip()
+
+
+def _heuristic_explanation(original: str, enhanced: str, job: str) -> str:
+    """Fallback explanation if model fails or returns unusable text."""
+    def tokens(s):
+        return set(re.findall(r"[A-Za-z]{3,}", s.lower()))
+    o, e, j = tokens(original), tokens(enhanced), tokens(job)
+    new_job_terms = (e - o) & j
+    improved_overlap = len((e & j)) - len((o & j))
+    bullets = [
+        f"• **Keyword Alignment:** Added or emphasized terms: {', '.join(list(new_job_terms)[:8]) or 'relevant role-specific keywords' }.",
+        f"• **Relevance Increase:** Net gain of ~{improved_overlap if improved_overlap>0 else 0} job-aligned keywords improving ATS match.",
+        "• **Action Impact:** Weak verbs replaced with stronger action verbs for clearer ownership and results.",
+        "• **Structure & Clarity:** Standardized sections (SUMMARY, EXPERIENCE, EDUCATION, SKILLS) and consistent bullet formatting.",
+        "• **Quantification:** Added/retained measurable impact where context allowed to strengthen credibility."
+    ]
+    return "\n".join(bullets)
+
+
+def _generate_explanation(original: str, enhanced: str, job: str) -> str:
+    """Ask model for explanation; fallback heuristically if bad/empty output."""
+    if not model:
+        return _heuristic_explanation(original, enhanced, job)
     try:
-        # First, get the enhanced resume with better formatting instructions
-        enhance_prompt = f"""
-        You are an expert resume writer and career coach. Please enhance the following resume to better match the job description while maintaining professional formatting.
+        prompt = f"""
+You are a senior resume strategist. Compare ORIGINAL vs ENHANCED for the JOB DESCRIPTION.
+Return 4-6 bullet points. Each bullet begins with **Bold Label** then a concise explanation *of the change and why it improves alignment* (NOT general advice). Do NOT ask for more info.
 
-        ORIGINAL RESUME:
-        {resume_text}
-
-        JOB DESCRIPTION:
-        {job_description}
-
-        Please provide an enhanced version that:
-        1. Maintains all original factual information (names, dates, companies, etc.)
-        2. Improves wording using stronger action verbs and industry keywords
-        3. Better highlights relevant skills and experiences for this specific job
-        4. Quantifies achievements where possible with numbers/percentages
-        5. Uses proper resume formatting with clear sections
-        6. Maintains professional tone and structure
-
-        IMPORTANT FORMATTING REQUIREMENTS:
-        - Keep the candidate's name at the top
-        - Organize content in clear sections (Contact, Summary/Objective, Experience, Education, Skills, etc.)
-        - Use bullet points for job responsibilities and achievements
-        - Maintain consistent formatting throughout
-        - Ensure each section is clearly separated
-
-        Return only the enhanced resume text with proper formatting:
-        """
-        
-        enhanced_response = model.generate_content(enhance_prompt)
-        enhanced_content = enhanced_response.text
-        
-        # Now get a detailed explanation of changes
-        explanation_prompt = f"""
-        You are an expert resume writer. I have enhanced a resume for this specific job description. Please provide a clear, engaging explanation of the key improvements made to help this candidate succeed.
-
-        JOB THEY'RE APPLYING FOR:
-        {job_description}
-
-        Please provide a concise explanation (3-5 bullet points) of the most impactful improvements made to better match this job and why they increase the candidate's chances.
-
-        Focus on specific improvements like:
-        - Relevant keywords and skills highlighted that match the job requirements
-        - Professional language and stronger action verbs used
-        - Technical skills and experiences emphasized for this role
-        - Achievements better presented or quantified
-        - Overall presentation improved for this specific position
-
-        Format as engaging bullet points:
-        • Enhanced [specific area]: [brief explanation of why this helps for this job]
-        • Improved [specific area]: [brief explanation of value added]
-        • Added [specific improvement]: [why this matters for this role]
-
-        Keep it professional but engaging, showing clear value for this specific job opportunity:
-        """
-        
-        explanation_response = model.generate_content(explanation_prompt)
-        explanation = explanation_response.text
-        
-        return enhanced_content, explanation
-        
+JOB DESCRIPTION:\n{job[:2500]}\n---
+ORIGINAL:\n{original[:4000]}\n---
+ENHANCED:\n{enhanced[:4000]}\n---
+"""
+        resp = model.generate_content(prompt)
+        text = (resp.text or '').strip() if resp else ''
+        # If model asks for more info or is empty, fallback
+        if (not text) or ('provide' in text.lower() and 'original' in text.lower() and 'enhanced' in text.lower()):
+            return _heuristic_explanation(original, enhanced, job)
+        return text
     except Exception as e:
-        logger.error(f"Error in AI enhancement: {str(e)}")
-        return resume_text, f"AI enhancement temporarily unavailable. Please try again. Error: {str(e)}"
+        logger.warning(f"Explanation generation failed: {e}")
+        return _heuristic_explanation(original, enhanced, job)
+
+
+def enhance_resume_with_ai(resume_text: str, job_description: str) -> tuple[str, str]:
+    """Enhance resume using AI with formatting + explanation fallback."""
+    if not model:
+        return resume_text, "AI disabled: original resume returned."
+    try:
+        enhance_prompt = f"""
+You are an elite technical resume writer. Rewrite the resume for the job below.
+RULES:
+- Preserve factual data (companies, titles, dates, degrees).
+- Strengthen impact; add conservative metrics ONLY if logically implied.
+- Use standard US resume section headers in ALL CAPS: SUMMARY, EXPERIENCE, EDUCATION, SKILLS, (PROJECTS if present), CERTIFICATIONS.
+- Bullets start with a strong action verb; no first-person; no pronouns.
+- Dense, concise, ATS friendly. First line: candidate name + primary contact placeholders if missing.
+- Output ONLY the enhanced resume text. No commentary.
+
+JOB DESCRIPTION (trimmed):\n{job_description[:3000]}\n---
+ORIGINAL RESUME (trimmed):\n{resume_text[:5000]}\n---
+"""
+        raw = model.generate_content(enhance_prompt)
+        enhanced_raw = (raw.text or '').strip() if raw else ''
+        if not enhanced_raw:
+            raise ValueError("Empty AI response")
+        normalized = _normalize_ai_text(enhanced_raw)
+        # Additional sanitization pass to remove markdown artifacts & placeholders
+        sanitized = sanitize_enhanced_content(normalized)
+        explanation = _generate_explanation(resume_text, sanitized, job_description)
+        return sanitized, explanation
+    except Exception as e:
+        logger.error(f"Error in AI enhancement: {e}")
+        return resume_text, f"AI enhancement temporarily unavailable (fallback). Error: {e}"
 
 def create_pdf_resume(content: str, output_path: str):
-    """Create a professionally formatted PDF from resume content"""
+    """Create a professionally formatted PDF with clear hierarchy & wrapping."""
     try:
-        doc = SimpleDocTemplate(output_path, pagesize=letter,
-                              rightMargin=inch, leftMargin=inch,
-                              topMargin=inch, bottomMargin=inch)
-        styles = getSampleStyleSheet()
-        story = []
-        
-        # Basic style for the body
-        body_style = styles['Normal']
-        
-        # Style for bullet points
-        bullet_style = ParagraphStyle(
-            'BulletStyle',
-            parent=styles['Normal'],
-            leftIndent=20,
-            firstLineIndent=0,
-            spaceBefore=2,
-            spaceAfter=2
+        from reportlab.lib.enums import TA_CENTER
+        # Clean content again for PDF safety
+        content = clean_for_pdf(content)
+
+        doc = SimpleDocTemplate(
+            output_path,
+            pagesize=letter,
+            rightMargin=54,
+            leftMargin=54,
+            topMargin=54,
+            bottomMargin=54,
         )
 
-        lines = content.strip().split('\n')
-        
-        for line in lines:
-            clean_line = line.strip()
-            
-            if not clean_line:
-                story.append(Spacer(1, 0.1*inch))
+        styles = getSampleStyleSheet()
+        base = styles['Normal']
+        base.fontSize = 10
+        base.leading = 13
+
+        title_style = ParagraphStyle(
+            'TITLE', parent=base, fontSize=16, leading=18,
+            alignment=TA_CENTER, spaceAfter=10
+        )
+        section_style = ParagraphStyle(
+            'SECTION', parent=base, fontSize=11, leading=14,
+            spaceBefore=14, spaceAfter=6, textColor=colors.HexColor('#222222')
+        )
+        bullet_style = ParagraphStyle(
+            'BULLET', parent=base, leftIndent=14, bulletIndent=6,
+            spaceBefore=2, spaceAfter=1
+        )
+        body_style = ParagraphStyle(
+            'BODY', parent=base, spaceBefore=1, spaceAfter=4
+        )
+
+        lines = [l.rstrip() for l in content.splitlines()]
+        first_non_empty = next((l for l in lines if l.strip()), '')
+        used_title = False
+        story = []
+
+        for raw in lines:
+            line = raw.strip()
+            if not line:
+                story.append(Spacer(1, 4))
                 continue
-
-            # Replace common bullet characters with a simple dash
-            if clean_line.startswith('•') or clean_line.startswith('*'):
-                clean_line = '- ' + clean_line[1:].strip()
-
-            if clean_line.startswith('- '):
-                p = Paragraph(clean_line, bullet_style)
+            if not used_title and line == first_non_empty:
+                story.append(Paragraph(line, title_style))
+                used_title = True
+                continue
+            if line.isupper() and 2 <= len(line.split()) <= 6 and len(line) <= 48:
+                story.append(Paragraph(line, section_style))
+                continue
+            if line.startswith('- '):
+                story.append(Paragraph(line, bullet_style))
+                continue
+            if len(line) > 180 and '.' in line:
+                parts = [p.strip() for p in re.split(r'(?<=\.)\s+', line) if p.strip()]
+                for ptxt in parts:
+                    story.append(Paragraph(ptxt, body_style))
             else:
-                p = Paragraph(clean_line, body_style)
-            
-            story.append(p)
+                story.append(Paragraph(line, body_style))
 
         doc.build(story)
-        
     except Exception as e:
-        logger.error(f"Error creating PDF: {str(e)}")
-        # If PDF creation fails, create a simple fallback text file
+        logger.error(f"Error creating PDF: {e}")
         try:
             with open(output_path.replace('.pdf', '.txt'), 'w') as f:
                 f.write(content)
-        except Exception as fallback_e:
-            logger.error(f"Fallback to text file also failed: {fallback_e}")
+        except Exception as fe:
+            logger.error(f"Fallback write failed: {fe}")
         raise e
+
+#############################
+# Post-processing sanitation
+#############################
+
+def sanitize_enhanced_content(text: str) -> str:
+    """Clean AI output: remove markdown asterisks, placeholder brackets, fix headings & bullets."""
+    lines = text.splitlines()
+    cleaned = []
+    header_keywords = {"SUMMARY","EXPERIENCE","EDUCATION","SKILLS","PROJECTS","CERTIFICATIONS","OBJECTIVE","PROFILE"}
+    action_verbs = {"developed","designed","implemented","led","managed","optimized","improved","architected","built","created","enhanced","reduced","increased","automated","migrated","refactored"}
+
+    def is_placeholder(l: str) -> bool:
+        l_low = l.lower()
+        return ('quantifiable achievement' in l_low or 'specify framework' in l_low or 'add another bullet' in l_low or l_low.startswith('[add ') )
+
+    first_content_index = None
+    for idx, raw in enumerate(lines):
+        line = raw.strip()
+        if not line:
+            cleaned.append("")
+            continue
+        # Record first non-empty
+        if first_content_index is None:
+            first_content_index = idx
+
+        # Pattern like '- *Summary**' or '- *John Smith**' possibly followed by extra asterisks or parenthetical
+        m = re.match(r"^- \*([^*]+?)\*+.*$", line)
+        if m:
+            candidate = m.group(1).strip()
+            up = candidate.upper()
+            if up in header_keywords:
+                cleaned.append(up)
+            else:
+                # Probably name line; keep original capitalization
+                cleaned.append(candidate)
+            continue
+
+        # Strip leading '- ' if it appears to be a malformed heading
+        if line.startswith('- '):
+            after = line[2:].strip()
+            # Remove leading/trailing asterisks from after
+            after = re.sub(r'^\*+','', after)
+            after = re.sub(r'\*+$','', after)
+            upper_candidate = after.upper()
+            if upper_candidate in header_keywords and len(after.split()) <= 5:
+                cleaned.append(upper_candidate)
+                continue
+            # Placeholder bullet? skip
+            if is_placeholder(after):
+                continue
+            # Real bullet if starts with verb or contains digit/percentage/tech token
+            first_word = after.split()[0].lower() if after.split() else ''
+            if first_word in action_verbs or re.search(r'(\d|api|sql|flask|python|cloud)', after.lower()):
+                cleaned.append(f"- {after}")
+                continue
+            # Otherwise keep as plain line (maybe part of contact block)
+            cleaned.append(after)
+            continue
+
+        # Remove surrounding markdown asterisks
+        line = re.sub(r'^\*+','', line)
+        line = re.sub(r'\*+$','', line)
+
+        # Remove bracket placeholders containing guidance
+        line = re.sub(r'\[(?:[^\]]*quantifiable[^\]]*)\]','', line, flags=re.IGNORECASE)
+        line = re.sub(r'\[(?:[^\]]*specify[^\]]*)\]','', line, flags=re.IGNORECASE)
+        line = re.sub(r'\[(?:[^\]]*add another bullet[^\]]*)\]','', line, flags=re.IGNORECASE)
+        line = re.sub(r'\s{2,}',' ', line).strip()
+        if not line:
+            continue
+        # Header detection (non-bullet)
+        if (len(line) < 40 and line.upper() in header_keywords):
+            cleaned.append(line.upper())
+            continue
+        cleaned.append(line)
+
+    # Collapse excess blank lines
+    final = []
+    prev_blank = False
+    for l in cleaned:
+        if l == "":
+            if not prev_blank:
+                final.append("")
+            prev_blank = True
+        else:
+            final.append(l)
+            prev_blank = False
+    return "\n".join(final).strip()
+
+def clean_for_pdf(text: str) -> str:
+    """Final cleaning for PDF rendering: remove leftover asterisks, placeholders, malformed bullets."""
+    lines = []
+    for raw in text.splitlines():
+        l = raw.strip()
+        if not l:
+            lines.append("")
+            continue
+        # Remove '- *Heading**' patterns
+        l = re.sub(r'^- \*([^*]+?)\*+.*$', r'\1', l)
+        # Remove stray leading '*'
+        l = re.sub(r'^\*(.+)\*$', r'\1', l)
+        # Strip placeholder bracket content
+        if re.search(r'(quantifiable achievement|add another bullet|specify framework|dates of employment)', l, re.IGNORECASE):
+            continue
+        # Drop any remaining bracketed guidance completely
+        if '[' in l and ']' in l:
+            l = re.sub(r'\[[^\]]*\]', '', l).strip()
+        # Collapse multiple spaces
+        l = re.sub(r'\s{2,}', ' ', l)
+        lines.append(l)
+    # Ensure first non-empty line not prefixed with '-'
+    for i, val in enumerate(lines):
+        if val and val.startswith('- '):
+            # if likely name/contact (contains @ or digit or |) promote to plain line
+            if any(tok in val.lower() for tok in ['@', 'gmail', 'linkedin', ' | ', 'github']):
+                lines[i] = val[2:].strip()
+            break
+    # Remove trailing/leading empty lines
+    while lines and not lines[0]:
+        lines.pop(0)
+    while lines and not lines[-1]:
+        lines.pop()
+    return "\n".join(lines)
 
 @app.route('/preview/<filename>')
 def preview_file(filename):
